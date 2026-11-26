@@ -2,7 +2,7 @@
   <img src="assets/logo.svg" alt="Завет" width="96" height="96">
 </p>
 
-<h1 align="center">✝ Завет</h1>
+<h1 align="center">Завет</h1>
 
 <p align="center">
   <strong>Язык программирования на библейском русском.</strong><br>
