@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/ДОКУМЕНТАЦИЯ.md">Документация</a> ·
+  <a href="https://zavet-lang.github.io/docs/">Документация</a> ·
   <a href="docs/СИНТАКСИС.md">Синтаксис</a> ·
   <a href="docs/СТДЛИБ.md">Стандартная библиотека</a> ·
   <a href="docs/ОКНО.md">Окно и графика</a> ·
