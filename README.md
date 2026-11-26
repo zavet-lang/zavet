@@ -99,14 +99,14 @@ curl -fsSL https://raw.githubusercontent.com/zavet-lang/zavet/main/install.sh | 
 ```bash
 brew install zavet-lang/tap/zavet
 ```
-Формула: [`packaging/homebrew/zavet.rb`](packaging/homebrew/zavet.rb).
+Каск публикуется в [zavet-lang/homebrew-tap](https://github.com/zavet-lang/homebrew-tap). Черновик формулы: [`packaging/homebrew/zavet.rb`](packaging/homebrew/zavet.rb).
 
 **Scoop (Windows):**
 ```powershell
 scoop bucket add zavet https://github.com/zavet-lang/scoop-bucket
 scoop install zavet
 ```
-Манифест: [`packaging/scoop/zavet.json`](packaging/scoop/zavet.json).
+Манифест публикуется в [zavet-lang/scoop-bucket](https://github.com/zavet-lang/scoop-bucket). Черновик: [`packaging/scoop/zavet.json`](packaging/scoop/zavet.json).
 
 **APT (Debian / Ubuntu):**
 Скачайте `.deb` из GitHub Releases и выполните:

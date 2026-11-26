@@ -44,17 +44,23 @@ nfpms:
       - rpm
     bindir: /usr/bin
 
-brews:
+homebrew_casks:
   - name: zavet
     homepage: https://github.com/zavet-lang/zavet
     description: Язык программирования Завет на библейском русском
     license: MIT
+    binaries:
+      - zavet
     repository:
       owner: zavet-lang
       name: homebrew-tap
-    directory: Formula
-    test: |
-      system "#{bin}/zavet", "версия"
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/zavet"]
+          end
 
 scoops:
   - name: zavet
@@ -64,6 +70,11 @@ scoops:
     repository:
       owner: zavet-lang
       name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+release:
+  mode: keep-existing
+  replace_existing_artifacts: true
 
 changelog:
   sort: asc
