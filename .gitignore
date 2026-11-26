@@ -1,0 +1,43 @@
+# Бинарники
+/zavet
+*.exe
+*.dll
+*.so
+*.dylib
+*.wasm
+
+# Релизные архивы
+*.tar.gz
+*.zip
+*.dmg
+*.deb
+*.rpm
+*.vsix
+
+# Артефакты сборки
+dist/
+installers/
+build/
+out/
+
+# Пакеты и локальные БД
+пакеты/
+*.db
+*.sqlite
+
+# Node modules (VS Code расширение)
+node_modules/
+vscode-extension/node_modules/
+vscode-extension/out/
+
+# IDE и ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Временные файлы
+*.log
+*.tmp
+/tmp/
+out_*.txt

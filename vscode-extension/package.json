@@ -1,0 +1,137 @@
+{
+  "name": "zavet-lang",
+  "displayName": "Завет — библейский язык",
+  "description": "Подсветка синтаксиса, сниппеты и запуск файлов .молитва",
+  "version": "1.1.0",
+  "publisher": "zavet",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters"
+  ],
+  "keywords": [
+    "zavet",
+    "молитва",
+    "библия",
+    "syntax"
+  ],
+  "activationEvents": [
+    "onLanguage:zavet"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "zavet",
+        "aliases": [
+          "Завет",
+          "молитва"
+        ],
+        "extensions": [
+          ".молитва"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/zavet-file-icon.svg",
+          "dark": "./media/zavet-file-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "zavet",
+        "scopeName": "source.zavet",
+        "path": "./syntaxes/zavet.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "zavet",
+        "path": "./snippets/zavet.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "zavet.run",
+        "title": "Завет: Запустить программу",
+        "icon": "$(play)"
+      },
+      {
+        "command": "zavet.runInTerminal",
+        "title": "Завет: Запустить в терминале"
+      },
+      {
+        "command": "zavet.openREPL",
+        "title": "Завет: Открыть REPL"
+      },
+      {
+        "command": "zavet.format",
+        "title": "Завет: Форматировать файл"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "zavet.run",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorLangId == zavet"
+      },
+      {
+        "command": "zavet.runInTerminal",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorLangId == zavet"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "zavet.run",
+          "when": "resourceLangId == zavet",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "zavet.run",
+          "when": "resourceLangId == zavet",
+          "group": "navigation"
+        },
+        {
+          "command": "zavet.format",
+          "when": "resourceLangId == zavet",
+          "group": "1_modification"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Завет",
+      "properties": {
+        "zavet.executablePath": {
+          "type": "string",
+          "default": "zavet",
+          "description": "Путь к исполняемому файлу zavet"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.19.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}

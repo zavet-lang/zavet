@@ -1,0 +1,12 @@
+# Браузер Завета — UI-процесс.
+#
+# Архитектура по Ladybird (github.com/LadybirdBrowser/ladybird):
+#   UI / Hub / RequestServer / LibWeb / Compositor
+# Модули: examples/браузер/  (см. README.md там).
+#
+# Управление: мышь, колесо, адресная строка, Ctrl+L, F5, Esc, Ctrl+T.
+# ← → на панели: история. Иконки — Font Awesome Solid (окно.иконка).
+
+приими приложение из "./браузер/приложение.молитва"
+
+приложение.запустить(1024, 680, "Завет", 0)

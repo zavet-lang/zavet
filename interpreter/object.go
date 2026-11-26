@@ -1,0 +1,371 @@
+package interpreter
+
+import (
+	"fmt"
+	"strconv"
+	"zavet/ast"
+)
+
+// Object - базовый интерфейс для всех объектов
+type Object interface {
+	Type() string
+	Inspect() string
+}
+
+// Integer - целое число
+type Integer struct {
+	Value int64
+}
+
+func (i *Integer) Type() string      { return "INTEGER" }
+func (i *Integer) Inspect() string   { return fmt.Sprintf("%d", i.Value) }
+
+// Float - дробное число
+type Float struct {
+	Value float64
+}
+
+func (f *Float) Type() string      { return "FLOAT" }
+func (f *Float) Inspect() string {
+	// Используем %g для красивого вывода без лишних нулей
+	s := strconv.FormatFloat(f.Value, 'g', -1, 64)
+	// Гарантируем, что есть точка или 'e' (отличаем от целого)
+	for i := 0; i < len(s); i++ {
+		if s[i] == '.' || s[i] == 'e' || s[i] == 'E' {
+			return s
+		}
+	}
+	return s + ".0"
+}
+
+// String - строка
+type String struct {
+	Value string
+}
+
+func (s *String) Type() string      { return "STRING" }
+func (s *String) Inspect() string   { return s.Value }
+
+// Boolean - булево значение
+type Boolean struct {
+	Value bool
+}
+
+func (b *Boolean) Type() string      { return "BOOLEAN" }
+func (b *Boolean) Inspect() string {
+	if b.Value {
+		return "истина"
+	}
+	return "ложь"
+}
+
+// Null - нет/null
+type Null struct{}
+
+func (n *Null) Type() string      { return "NULL" }
+func (n *Null) Inspect() string   { return "ничего" }
+
+// ReturnValue - возвращаемое значение
+type ReturnValue struct {
+	Value Object
+}
+
+func (rv *ReturnValue) Type() string    { return "RETURN_VALUE" }
+func (rv *ReturnValue) Inspect() string { return rv.Value.Inspect() }
+
+// Break - прервать цикл
+type Break struct{}
+
+func (b *Break) Type() string    { return "BREAK" }
+func (b *Break) Inspect() string { return "прервать" }
+
+// Continue - продолжить цикл
+type Continue struct{}
+
+func (c *Continue) Type() string    { return "CONTINUE" }
+func (c *Continue) Inspect() string { return "продолжить" }
+
+// Function - функция
+type Function struct {
+	Parameters  []*ast.Identifier
+	ParamTypes  []string // опциональные аннотации типов параметров
+	ReturnType  string   // опциональный тип возврата
+	Defaults    []ast.Expression
+	HasRest     bool
+	Body        *ast.BlockStatement
+	Env         *Environment
+	IsGenerator bool
+	Name        string // имя функции (для stack trace), пусто для лямбд
+}
+
+func (f *Function) Type() string      { return "FUNCTION" }
+func (f *Function) Inspect() string   { return "слово(...)" }
+
+// BoundMethod — метод экземпляра: хранит это + функцию.
+// obj.метод без скобок даёт BoundMethod; вызов подставляет это.
+type BoundMethod struct {
+	Self  *Instance
+	Fn    *Function
+	Owner int // индекс класса в Self.Chain, где определён метод (для «родитель»)
+}
+
+func (m *BoundMethod) Type() string    { return "BOUND_METHOD" }
+func (m *BoundMethod) Inspect() string { return "слово(это, ...)" }
+
+// Builtin - встроенное слово
+type Builtin struct {
+	Fn func(args ...Object) Object
+}
+
+func (b *Builtin) Type() string      { return "BUILTIN" }
+func (b *Builtin) Inspect() string   { return "встроенное слово" }
+
+// Array - массив
+type Array struct {
+	Elements []Object
+}
+
+func (ao *Array) Type() string { return "ARRAY" }
+func (ao *Array) Inspect() string {
+	result := "["
+	for i, e := range ao.Elements {
+		if i > 0 {
+			result += ", "
+		}
+		result += e.Inspect()
+	}
+	result += "]"
+	return result
+}
+
+// Error - ошибка
+type Error struct {
+	Message    string // полное сообщение для вывода (с локацией, подсказкой, stack trace)
+	RawMessage string // только текст ошибки без украшений (для `поймать ошибка`)
+	Line       int
+	Column     int
+}
+
+func (e *Error) Type() string { return "ERROR" }
+func (e *Error) Inspect() string {
+	return e.Message
+}
+
+// ErrorValue - значение ошибки (не пропагируется как ошибка)
+type ErrorValue struct {
+	Message string
+}
+
+func (e *ErrorValue) Type() string    { return "ERROR_VALUE" }
+func (e *ErrorValue) Inspect() string { return e.Message }
+
+// HashKey - ключ для хеш-таблицы
+type HashKey struct {
+	Type  string
+	Value uint64
+}
+
+// Hashable - интерфейс для объектов, которые могут быть ключами
+type Hashable interface {
+	HashKey() HashKey
+}
+
+func (i *Integer) HashKey() HashKey {
+	return HashKey{Type: i.Type(), Value: uint64(i.Value)}
+}
+
+func (b *Boolean) HashKey() HashKey {
+	var value uint64
+	if b.Value {
+		value = 1
+	} else {
+		value = 0
+	}
+	return HashKey{Type: b.Type(), Value: value}
+}
+
+func (s *String) HashKey() HashKey {
+	// Простой хеш для строк
+	var hash uint64
+	for _, ch := range s.Value {
+		hash = hash*31 + uint64(ch)
+	}
+	return HashKey{Type: s.Type(), Value: hash}
+}
+
+// HashPair - пара ключ-значение
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+// Hash - словарь с сохранением порядка вставки.
+// Pairs хранит значения для быстрого поиска, Keys — порядок вставки.
+type Hash struct {
+	Pairs map[HashKey]HashPair
+	Keys  []HashKey
+}
+
+// NewHash создаёт пустой словарь.
+func NewHash() *Hash {
+	return &Hash{Pairs: map[HashKey]HashPair{}, Keys: []HashKey{}}
+}
+
+// Set добавляет или обновляет пару ключ-значение, сохраняя порядок
+// первой вставки. Возвращает false, если ключ не hashable.
+func (h *Hash) Set(keyObj, value Object) bool {
+	hashable, ok := keyObj.(Hashable)
+	if !ok {
+		return false
+	}
+	key := hashable.HashKey()
+	if h.Pairs == nil {
+		h.Pairs = map[HashKey]HashPair{}
+	}
+	if _, exists := h.Pairs[key]; !exists {
+		h.Keys = append(h.Keys, key)
+	}
+	h.Pairs[key] = HashPair{Key: keyObj, Value: value}
+	return true
+}
+
+// orderedPairs возвращает пары в порядке вставки. Если Keys пуст
+// (например, словарь создан старым кодом напрямую через карту) —
+// возвращает пары в порядке итерации карты.
+func (h *Hash) orderedPairs() []HashPair {
+	if len(h.Keys) == len(h.Pairs) {
+		out := make([]HashPair, 0, len(h.Keys))
+		for _, k := range h.Keys {
+			if p, ok := h.Pairs[k]; ok {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	// fallback: ключи и пары рассинхронизированы
+	out := make([]HashPair, 0, len(h.Pairs))
+	for _, p := range h.Pairs {
+		out = append(out, p)
+	}
+	return out
+}
+
+func (h *Hash) Type() string { return "HASH" }
+func (h *Hash) Inspect() string {
+	result := "{"
+	for i, pair := range h.orderedPairs() {
+		if i > 0 {
+			result += ", "
+		}
+		result += pair.Key.Inspect() + ": " + pair.Value.Inspect()
+	}
+	result += "}"
+	return result
+}
+
+// Instance - экземпляр класса
+type Instance struct {
+	Class      *Hash
+	Parent     *Hash  // Родительский класс для наследования
+	ParentName string // Имя родительского класса (для ленивой загрузки)
+	Chain      []*Hash // Цепочка наследования: класс, родитель, дед, …
+	Properties map[string]Object
+}
+
+func (inst *Instance) Type() string { return "INSTANCE" }
+func (inst *Instance) Inspect() string {
+	return fmt.Sprintf("<экземпляр>")
+}
+
+// Константы
+var (
+	NULL  = &Null{}
+	TRUE  = &Boolean{Value: true}
+	FALSE = &Boolean{Value: false}
+)
+
+// Кеш часто используемых маленьких целых чисел.
+// Создание *Integer на каждое значение в горячем коде — очень дорого
+// (allocator + GC давят), поэтому кешируем диапазон [-128..256].
+// Стандартный приём CPython.
+const (
+	smallIntMin = -128
+	smallIntMax = 256
+)
+
+var smallInts [smallIntMax - smallIntMin + 1]*Integer
+
+func init() {
+	for i := smallIntMin; i <= smallIntMax; i++ {
+		smallInts[i-smallIntMin] = &Integer{Value: int64(i)}
+	}
+}
+
+// NewInteger возвращает *Integer, переиспользуя из кеша для малых
+// значений. Используйте вместо &Integer{Value: x} в горячем коде.
+func NewInteger(v int64) *Integer {
+	if v >= smallIntMin && v <= smallIntMax {
+		return smallInts[v-smallIntMin]
+	}
+	return &Integer{Value: v}
+}
+
+// Generator - ленивый генератор на основе goroutine + channel
+type Generator struct {
+	Ch     chan Object  // канал для значений
+	Done   chan bool    // канал завершения
+	closed bool
+}
+
+func (g *Generator) Type() string { return "GENERATOR" }
+func (g *Generator) Inspect() string { return "<генератор>" }
+
+// Next возвращает следующее значение и флаг "ещё есть"
+func (g *Generator) Next() (Object, bool) {
+	if g.closed {
+		return NULL, false
+	}
+	val, ok := <-g.Ch
+	if !ok {
+		g.closed = true
+		return NULL, false
+	}
+	return val, true
+}
+
+// Close закрывает генератор
+func (g *Generator) Close() {
+	if !g.closed {
+		g.closed = true
+		select {
+		case g.Done <- true:
+		default:
+		}
+	}
+}
+
+// Future - результат асинхронной операции
+type Future struct {
+	Done   chan struct{}
+	Result Object
+	mu     bool // помечен ли результат
+}
+
+func (f *Future) Type() string    { return "FUTURE" }
+func (f *Future) Inspect() string { return "<future>" }
+
+// Wait ожидает завершения и возвращает результат
+func (f *Future) Wait() Object {
+	<-f.Done
+	return f.Result
+}
+
+// Ready — неблокирующая проверка готовности Future.
+func (f *Future) Ready() bool {
+	select {
+	case <-f.Done:
+		return true
+	default:
+		return false
+	}
+}

@@ -1,0 +1,150 @@
+{
+  "scopeName": "source.zavet",
+  "name": "Завет",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#decorators" },
+    { "include": "#keywords" },
+    { "include": "#builtins" },
+    { "include": "#functions" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.zavet",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.zavet",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.zavet", "match": "\\\\." },
+            {
+              "name": "meta.interpolation.zavet",
+              "begin": "\\{",
+              "end": "\\}",
+              "patterns": [{ "include": "$self" }]
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.zavet",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.zavet", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.float.zavet", "match": "\\b\\d+\\.\\d+\\b" },
+        { "name": "constant.numeric.integer.zavet", "match": "\\b\\d+\\b" }
+      ]
+    },
+    "decorators": {
+      "patterns": [
+        {
+          "name": "entity.name.function.decorator.zavet",
+          "match": "@[\\wа-яА-ЯёЁ_]+"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(если|иначеесли|иначе|для|от|до|по|в|доколе|повтори|раз|прерви|продолжи|аминь|попытка|поймать|всегда|бросить|разбери|когда|выдать|ждать)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "storage.type.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(пусть|измени)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "storage.modifier.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(статичная|асинх|открыто)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "keyword.other.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(слово|образ|род|новый|это|конец|приими|открой|из|как|загрузить|тест|проверить|наследует|родитель)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "constant.language.boolean.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(истина|ложь)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "constant.language.null.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(ничего)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "keyword.operator.logical.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(и|или|не)(?![\\wа-яА-ЯёЁ])"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(возгласи|ввод|стих|писание|длина|тип|строка|число|ключи|значения|добавить|удалить|вставить|фильтр|преобразовать|свернуть|сортировать|сумма|диапазон|содержит|разделить|соединить|заменить|верхний|нижний|подстрока|обрезать|корень|абс|мин|макс|загрузить|читать_файл|записать_файл)(?![\\wа-яА-ЯёЁ])"
+        },
+        {
+          "name": "support.class.module.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ])(мат|время|json|регвыр|http|крипто|csv|случайное|файлы|путь|ос|cli|бд)(?![\\wа-яА-ЯёЁ])(?=\\.)"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.zavet",
+          "match": "(?<=слово\\s+)[\\wа-яА-ЯёЁ_]+"
+        },
+        {
+          "name": "entity.name.type.class.zavet",
+          "match": "(?<=образ\\s+)[\\wа-яА-ЯёЁ_]+"
+        },
+        {
+          "name": "entity.name.type.class.zavet",
+          "match": "(?<=новый\\s+)[\\wа-яА-ЯёЁ_]+"
+        },
+        {
+          "name": "entity.name.type.class.zavet",
+          "match": "(?<=наследует\\s+)[\\wа-яА-ЯёЁ_]+"
+        },
+        {
+          "name": "entity.name.function.zavet",
+          "match": "(?<![\\wа-яА-ЯёЁ.])[\\wа-яА-ЯёЁ_]+(?=\\s*\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "support.function.method.zavet",
+          "match": "(?<=\\.)[\\wа-яА-ЯёЁ_]+(?=\\()"
+        },
+        { "name": "keyword.operator.pipeline.zavet", "match": "\\|>" },
+        { "name": "keyword.operator.nullish.zavet", "match": "\\?\\?" },
+        { "name": "keyword.operator.optional.zavet", "match": "\\?\\." },
+        { "name": "keyword.operator.spread.zavet", "match": "\\.\\.\\." },
+        { "name": "keyword.operator.range.zavet", "match": "\\.\\." },
+        { "name": "keyword.operator.arithmetic.zavet", "match": "\\+|\\-|\\*|//|\\/|%" },
+        { "name": "keyword.operator.comparison.zavet", "match": "==|!=|<=|>=|<|>" },
+        { "name": "keyword.operator.assignment.zavet", "match": "\\+=|-=|\\*=|/=|=" },
+        { "name": "keyword.operator.arrow.zavet", "match": "=>|-> " },
+        { "name": "keyword.operator.ternary.zavet", "match": "\\?|:" }
+      ]
+    }
+  }
+}

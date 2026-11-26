@@ -1,0 +1,69 @@
+version: 2
+
+project_name: zavet
+
+builds:
+  - id: zavet
+    main: .
+    binary: zavet
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: zavet-pkg
+    package_name: zavet
+    vendor: Zavet
+    homepage: https://github.com/zavet-lang/zavet
+    maintainer: Zavet Maintainers
+    description: Язык программирования Завет на библейском русском
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+brews:
+  - name: zavet
+    homepage: https://github.com/zavet-lang/zavet
+    description: Язык программирования Завет на библейском русском
+    license: MIT
+    repository:
+      owner: zavet-lang
+      name: homebrew-tap
+    directory: Formula
+    test: |
+      system "#{bin}/zavet", "версия"
+
+scoops:
+  - name: zavet
+    homepage: https://github.com/zavet-lang/zavet
+    description: Язык программирования Завет на библейском русском
+    license: MIT
+    repository:
+      owner: zavet-lang
+      name: scoop-bucket
+
+changelog:
+  sort: asc
