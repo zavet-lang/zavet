@@ -132,7 +132,10 @@ func TestExamplesRun(t *testing.T) {
 			if err != nil {
 				t.Fatalf("не удалось прочитать %s: %v", name, err)
 			}
-			_ = runProgram(t, string(source), name)
+			out := runProgram(t, string(source), name)
+			if strings.Contains(out, "✗") {
+				t.Fatalf("встроенный тест в %s провалился:\n%s", name, out)
+			}
 		})
 	}
 }
