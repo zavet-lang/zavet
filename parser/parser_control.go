@@ -207,6 +207,24 @@ func (p *Parser) parseWhileExpression() ast.Expression {
 	return expression
 }
 
+// parseRepeatExpression: повтори N раз <блок> конец (или : выражение).
+func (p *Parser) parseRepeatExpression() ast.Expression {
+	expression := &ast.RepeatExpression{Token: p.curToken}
+
+	p.nextToken()
+	expression.Count = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.TIMES) {
+		return nil
+	}
+
+	body, inline := p.parseInlineOrBlock()
+	expression.Body = body
+	expression.IsInline = inline
+
+	return expression
+}
+
 // === Обработка ошибок ===
 
 // parseTryExpression: попытка <блок> [поймать [v] <блок>] [всегда <блок>] конец.

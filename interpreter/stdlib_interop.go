@@ -1,3 +1,5 @@
+//go:build !js
+
 package interpreter
 
 import (
@@ -62,7 +64,7 @@ func registerInteropModules() {
 	// Модуль «питон»
 	pyFns := map[string]func(args ...Object) Object{
 		"доступен": func(args ...Object) Object {
-			return nativeBoolToBoolean(pythonBin() != "")
+			return nativeBoolToBooleanObject(pythonBin() != "")
 		},
 		// питон.выражение(код, [данные]) -> значение Завета
 		"выражение": func(args ...Object) Object {
@@ -142,7 +144,7 @@ func registerInteropModules() {
 	// Модуль «js» (Node.js)
 	jsFns := map[string]func(args ...Object) Object{
 		"доступен": func(args ...Object) Object {
-			return nativeBoolToBoolean(nodeBin() != "")
+			return nativeBoolToBooleanObject(nodeBin() != "")
 		},
 		// js.выражение(код, [данные]) -> значение Завета
 		"выражение": func(args ...Object) Object {

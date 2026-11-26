@@ -453,6 +453,8 @@ func (w *writer) formatExpression(expr ast.Expression) {
 		w.formatForIn(e)
 	case *ast.WhileExpression:
 		w.formatWhile(e)
+	case *ast.RepeatExpression:
+		w.formatRepeat(e)
 	case *ast.FunctionLiteral:
 		w.formatFunction(e)
 	case *ast.NewExpression:
@@ -703,6 +705,24 @@ func (w *writer) formatWhile(e *ast.WhileExpression) {
 	w.write("конец")
 }
 
+// formatRepeat форматирует "повтори N раз".
+func (w *writer) formatRepeat(e *ast.RepeatExpression) {
+	w.write("повтори ")
+	w.formatExpression(e.Count)
+	w.write(" раз")
+
+	if e.IsInline && e.Body != nil && len(e.Body.Statements) == 1 {
+		w.write(": ")
+		w.formatStatementInline(e.Body.Statements[0])
+		return
+	}
+
+	w.nl()
+	w.formatBlock(e.Body)
+	w.pad()
+	w.write("конец")
+}
+
 // formatMatch форматирует "совпадение значение когда ... конец".
 func (w *writer) formatMatch(e *ast.MatchExpression) {
 	w.write("разбери ")
@@ -788,65 +808,121 @@ func (w *writer) formatClass(s *ast.LetStatement) {
 	// корректно.
 	w.lastEmittedLine = s.Token.Line
 
-	// Считаем методы (ключи-строки, значения-функции, кроме __parent_name__).
-	type method struct {
-		name string
-		fn   *ast.FunctionLiteral
-	}
-	methods := []method{}
+	// Собираем множества статических имён, констант и типов.
+	staticConst := map[string]bool{}
+	staticTypes := map[string]string{}
 	for _, k := range hash.KeyOrder {
 		sl, ok := k.(*ast.StringLiteral)
 		if !ok {
 			continue
 		}
-		if sl.Value == "__parent_name__" {
-			continue
+		switch sl.Value {
+		case "__static_const__":
+			if arr, ok := hash.Pairs[k].(*ast.ArrayLiteral); ok {
+				for _, el := range arr.Elements {
+					if s2, ok := el.(*ast.StringLiteral); ok {
+						staticConst[s2.Value] = true
+					}
+				}
+			}
+		case "__static_types__":
+			if th, ok := hash.Pairs[k].(*ast.HashLiteral); ok {
+				for tk, tv := range th.Pairs {
+					if ks, ok1 := tk.(*ast.StringLiteral); ok1 {
+						if vs, ok2 := tv.(*ast.StringLiteral); ok2 {
+							staticTypes[ks.Value] = vs.Value
+						}
+					}
+				}
+			}
 		}
-		fn, ok := hash.Pairs[k].(*ast.FunctionLiteral)
+	}
+
+	type member struct {
+		name string
+		line int
+		fn   *ast.FunctionLiteral
+		val  ast.Expression
+	}
+	members := []member{}
+	for _, k := range hash.KeyOrder {
+		sl, ok := k.(*ast.StringLiteral)
 		if !ok {
 			continue
 		}
-		// Возвращаем имя 'инициализация' обратно в 'создать' для
-		// идиоматичной записи.
-		name := sl.Value
-		if name == "инициализация" {
-			name = "создать"
+		if sl.Value == "__name__" || sl.Value == "__parent_name__" ||
+			sl.Value == "__static__" || sl.Value == "__static_const__" || sl.Value == "__static_types__" {
+			continue
 		}
-		methods = append(methods, method{name, fn})
+		v := hash.Pairs[k]
+		if fn, ok := v.(*ast.FunctionLiteral); ok {
+			// Возвращаем имя 'инициализация' обратно в 'создать' для
+			// идиоматичной записи.
+			name := sl.Value
+			if name == "инициализация" {
+				name = "создать"
+			}
+			members = append(members, member{name: name, line: fn.Token.Line, fn: fn})
+		} else if v != nil {
+			members = append(members, member{name: sl.Value, line: sl.Token.Line, val: v})
+		}
 	}
 
-	for i, m := range methods {
-		// Комментарии перед методом.
-		if m.fn.Token.Line > 0 {
-			w.emitCommentsBefore(m.fn.Token.Line)
+	for i, m := range members {
+		// Комментарии перед членом.
+		if m.line > 0 {
+			w.emitCommentsBefore(m.line)
 		}
 		w.pad()
-		w.write("слово ")
-		w.write(m.name)
-		w.write("(")
-		w.formatParams(m.fn.Parameters, m.fn.Defaults, m.fn.HasRest)
-		w.write(")")
-
-		// Inline-форма метода.
-		isInlineMethod := m.fn.IsInline && m.fn.Body != nil && len(m.fn.Body.Statements) == 1
-		if isInlineMethod {
-			if ret, ok := m.fn.Body.Statements[0].(*ast.ReturnStatement); ok {
-				w.write(": ")
-				w.formatExpression(ret.ReturnValue)
-				w.nl()
-				if i < len(methods)-1 {
-					w.nl()
-				}
-				continue
+		if m.fn != nil {
+			if m.fn.IsStatic {
+				w.write("статичная ")
 			}
-		}
+			w.write("слово ")
+			w.write(m.name)
+			w.write("(")
+			w.formatParamsTyped(m.fn.Parameters, m.fn.ParamTypes, m.fn.Defaults, m.fn.HasRest)
+			w.write(")")
+			if m.fn.ReturnType != "" {
+				w.write(" -> ")
+				w.write(m.fn.ReturnType)
+			}
 
-		w.nl()
-		w.formatBlock(m.fn.Body)
-		w.pad()
-		w.write("конец")
-		w.nl()
-		if i < len(methods)-1 {
+			// Inline-форма метода.
+			isInlineMethod := m.fn.IsInline && m.fn.Body != nil && len(m.fn.Body.Statements) == 1
+			if isInlineMethod {
+				if ret, ok := m.fn.Body.Statements[0].(*ast.ReturnStatement); ok {
+					w.write(": ")
+					w.formatExpression(ret.ReturnValue)
+					w.nl()
+					if i < len(members)-1 {
+						w.nl()
+					}
+					continue
+				}
+			}
+
+			w.nl()
+			w.formatBlock(m.fn.Body)
+			w.pad()
+			w.write("конец")
+			w.nl()
+		} else {
+			if staticConst[m.name] {
+				w.write("статичная пусть ")
+			} else {
+				w.write("статичная измени ")
+			}
+			w.write(m.name)
+			if tn, ok := staticTypes[m.name]; ok && tn != "" {
+				w.write(": ")
+				w.write(tn)
+			}
+			w.write(" = ")
+			w.formatExpression(m.val)
+			w.nl()
+		}
+		if i < len(members)-1 {
 			w.nl()
 		}
 	}
@@ -992,6 +1068,8 @@ func exprLine(expr ast.Expression) int {
 	case *ast.GroupedExpression:
 		return e.Token.Line
 	case *ast.IndexExpression:
+		return e.Token.Line
+	case *ast.RepeatExpression:
 		return e.Token.Line
 	}
 	return 0

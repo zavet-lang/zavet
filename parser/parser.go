@@ -94,6 +94,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.LBRACE, p.parseHashLiteral)
 	p.registerPrefix(lexer.FOR, p.parseForExpression)
 	p.registerPrefix(lexer.WHILE, p.parseWhileExpression)
+	p.registerPrefix(lexer.REPEAT, p.parseRepeatExpression)
 	p.registerPrefix(lexer.TRY, p.parseTryExpression)
 	p.registerPrefix(lexer.NEW, p.parseNewExpression)
 	p.registerPrefix(lexer.ASYNC, p.parseAsyncExpression)
@@ -275,6 +276,9 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseImportStatement()
 	case lexer.EXPORT:
 		return p.parseExportStatement()
+	case lexer.STATIC:
+		p.errors = append(p.errors, fmt.Sprintf("❌ Ошибка парсинга в строке %d: слово «статичная» допустимо только внутри «образ».", p.curToken.Line))
+		return nil
 	default:
 		// Парсим выражение, может быть присваивание
 		return p.parseExpressionOrAssignment()

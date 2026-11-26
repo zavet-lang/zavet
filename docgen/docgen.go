@@ -235,13 +235,44 @@ func extractStmtDoc(stmt ast.Statement, lines []string, line int, exported bool)
 				Doc:      doc,
 			}
 			if hash, ok := s.Value.(*ast.HashLiteral); ok {
-				for k, v := range hash.Pairs {
+				staticConst := map[string]bool{}
+				staticTypes := map[string]string{}
+				if sc, exists := hash.Pairs[&ast.StringLiteral{Value: "__static_const__"}]; exists {
+					_ = sc
+				}
+				for _, k := range hash.KeyOrder {
+					ks, isStr := k.(*ast.StringLiteral)
+					if !isStr {
+						continue
+					}
+					switch ks.Value {
+					case "__static_const__":
+						if arr, ok := hash.Pairs[k].(*ast.ArrayLiteral); ok {
+							for _, el := range arr.Elements {
+								if s2, ok := el.(*ast.StringLiteral); ok {
+									staticConst[s2.Value] = true
+								}
+							}
+						}
+					case "__static_types__":
+						if th, ok := hash.Pairs[k].(*ast.HashLiteral); ok {
+							for tk, tv := range th.Pairs {
+								if tks, ok1 := tk.(*ast.StringLiteral); ok1 {
+									if tvs, ok2 := tv.(*ast.StringLiteral); ok2 {
+										staticTypes[tks.Value] = tvs.Value
+									}
+								}
+							}
+						}
+					}
+				}
+				for _, k := range hash.KeyOrder {
 					ks, isStr := k.(*ast.StringLiteral)
 					if !isStr {
 						continue
 					}
 					if ks.Value == "__parent_name__" {
-						if ps, ok := v.(*ast.StringLiteral); ok {
+						if ps, ok := hash.Pairs[k].(*ast.StringLiteral); ok {
 							it.ParentName = ps.Value
 						}
 						continue
@@ -249,14 +280,36 @@ func extractStmtDoc(stmt ast.Statement, lines []string, line int, exported bool)
 					if strings.HasPrefix(ks.Value, "__") {
 						continue
 					}
+					v := hash.Pairs[k]
 					if fn, ok := v.(*ast.FunctionLiteral); ok {
 						mLine := fn.Token.Line
+						displayName := ks.Value
+						if displayName == "инициализация" {
+							displayName = "создать"
+						}
 						it.Methods = append(it.Methods, DocItem{
 							Kind:      "слово",
-							Name:      ks.Value,
-							Signature: formatFnSig(ks.Value, fn),
+							Name:      displayName,
+							Signature: formatFnSig(displayName, fn),
 							Line:      mLine,
 							Doc:       extractDocComment(lines, mLine),
+						})
+					} else if v != nil {
+						kw := "статичная измени"
+						if staticConst[ks.Value] {
+							kw = "статичная пусть"
+						}
+						sig := kw + " " + ks.Value
+						if tn := staticTypes[ks.Value]; tn != "" {
+							sig += ": " + tn
+						}
+						fLine := ks.Token.Line
+						it.Methods = append(it.Methods, DocItem{
+							Kind:      kw,
+							Name:      ks.Value,
+							Signature: sig,
+							Line:      fLine,
+							Doc:       extractDocComment(lines, fLine),
 						})
 					}
 				}
@@ -343,7 +396,11 @@ func formatFnSig(name string, fn *ast.FunctionLiteral) string {
 		}
 		parts = append(parts, s)
 	}
-	sig := fmt.Sprintf("слово %s(%s)", name, strings.Join(parts, ", "))
+	prefix := "слово"
+	if fn.IsStatic {
+		prefix = "статичная слово"
+	}
+	sig := fmt.Sprintf("%s %s(%s)", prefix, name, strings.Join(parts, ", "))
 	if fn.ReturnType != "" {
 		sig += " -> " + fn.ReturnType
 	}

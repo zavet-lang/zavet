@@ -1,6 +1,8 @@
 package interpreter
 
 import (
+	"fmt"
+
 	"zavet/ast"
 )
 
@@ -261,6 +263,40 @@ func evalWhileExpression(we *ast.WhileExpression, env *Environment) Object {
 		}
 	}
 
+	return result
+}
+
+func evalRepeatExpression(re *ast.RepeatExpression, env *Environment) Object {
+	cntObj := Eval(re.Count, env)
+	if isError(cntObj) {
+		return cntObj
+	}
+	cntInt, ok := cntObj.(*Integer)
+	if !ok {
+		return ErrorWithHint(
+			re.Token,
+			fmt.Sprintf("сын мой, «повтори … раз» просит целое число, а дан вид %s", translateType(cntObj.Type())),
+			"Укажи целое число повторений, например: повтори 5 раз",
+		)
+	}
+
+	var result Object = NULL
+	for i := int64(0); i < cntInt.Value; i++ {
+		result = Eval(re.Body, env)
+		if isError(result) {
+			return result
+		}
+		if result.Type() == "RETURN_VALUE" {
+			return result
+		}
+		if result.Type() == "BREAK" {
+			return NULL
+		}
+		if result.Type() == "CONTINUE" {
+			result = NULL
+			continue
+		}
+	}
 	return result
 }
 

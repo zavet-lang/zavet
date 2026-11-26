@@ -95,6 +95,7 @@ type Function struct {
 	Body        *ast.BlockStatement
 	Env         *Environment
 	IsGenerator bool
+	IsStatic    bool
 	Name        string // имя функции (для stack trace), пусто для лямбд
 }
 

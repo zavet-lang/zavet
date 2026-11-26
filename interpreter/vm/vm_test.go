@@ -102,6 +102,59 @@ func TestVMArraysAndLogic(t *testing.T) {
 	}
 }
 
+func TestVMRepeat(t *testing.T) {
+	out := runVM(t, `
+измени с = 0
+повтори 5 раз
+    с += 2
+конец
+повтори 0 раз: с += 100
+повтори -3 раз: с += 100
+измени к = 3
+повтори к раз
+    к = 10
+    с += 1
+конец
+возгласи(с)
+`)
+	if strings.TrimSpace(out) != "13" {
+		t.Fatalf("expected 13, got %q", out)
+	}
+}
+
+func TestVMRepeatBreakContinue(t *testing.T) {
+	out := runVM(t, `
+измени i = 0
+измени s = 0
+повтори 6 раз
+    i += 1
+    если i == 2: продолжи
+    если i == 5: прерви
+    s += i
+конец
+возгласи(s)
+`)
+	if strings.TrimSpace(out) != "8" {
+		t.Fatalf("expected 8, got %q", out)
+	}
+}
+
+func TestVMRepeatNonIntError(t *testing.T) {
+	l := lexer.New(`повтори "три" раз: возгласи(1)`)
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	chunk, err := Compile(prog)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if err := New(chunk).Run(); err == nil {
+		t.Fatalf("expected runtime error for non-integer repeat count")
+	}
+}
+
 func BenchmarkVMFib20(b *testing.B) {
 	src := `
 слово фиб(n)

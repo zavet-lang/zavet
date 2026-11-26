@@ -1,8 +1,9 @@
-//go:build !windows
+//go:build !windows && !js
 
 package interpreter
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -22,14 +23,24 @@ import (
 // Браузерный backend «окно»: HTTP + canvas. Работает на Linux/macOS
 // без CGO. Windows использует нативный Win32 (stdlib_window_windows.go).
 
+type browserTextDraw struct {
+	x, y     int
+	text     string
+	r, g, b  byte
+	icon     bool
+	iconName string
+}
+
 type browserWin struct {
 	mu         sync.Mutex
 	w, h       int
 	pixels     []byte // BGRA
+	texts      []browserTextDraw
 	keys       map[string]bool
 	open       bool
 	title      string
 	addr       string
+	ln         net.Listener
 	mouseX     int
 	mouseY     int
 	leftDown   bool
@@ -40,7 +51,10 @@ type browserWin struct {
 	charBuf    []rune
 }
 
-var bwin *browserWin
+var (
+	bwin        *browserWin
+	openBrowser = defaultOpenBrowser
+)
 
 func registerWindowModule() {
 	fns := map[string]func(args ...Object) Object{
@@ -62,7 +76,13 @@ func registerWindowModule() {
 		"колесо":        browserWheel,
 		"символ":        browserChars,
 		"открыто": func(args ...Object) Object {
-			if bwin != nil && bwin.open {
+			if bwin == nil {
+				return FALSE
+			}
+			bwin.mu.Lock()
+			open := bwin.open
+			bwin.mu.Unlock()
+			if open {
 				return TRUE
 			}
 			return FALSE
@@ -85,26 +105,74 @@ func registerWindowModule() {
 
 func init() {
 	registerWindowModule()
-	for c := 'A'; c <= 'Z'; c++ {
-		pixelFont[c] = pixelFont[c-'A'+'a']
+}
+
+func browserCloseActive() {
+	if bwin == nil {
+		return
+	}
+	bwin.mu.Lock()
+	bwin.open = false
+	ln := bwin.ln
+	bwin.ln = nil
+	bwin.mu.Unlock()
+	if ln != nil {
+		_ = ln.Close()
 	}
 }
 
+func browserRGBArgs(args []Object, fn string) (byte, byte, byte, *Error) {
+	if len(args) < 3 {
+		return 0, 0, 0, builtinErrorWrongArgCount(fn, 3, len(args))
+	}
+	rr, ok := args[0].(*Integer)
+	if !ok {
+		return 0, 0, 0, builtinErrorWrongArgType(fn, 1, "INTEGER", string(args[0].Type()))
+	}
+	gg, ok := args[1].(*Integer)
+	if !ok {
+		return 0, 0, 0, builtinErrorWrongArgType(fn, 2, "INTEGER", string(args[1].Type()))
+	}
+	bb, ok := args[2].(*Integer)
+	if !ok {
+		return 0, 0, 0, builtinErrorWrongArgType(fn, 3, "INTEGER", string(args[2].Type()))
+	}
+	clamp := func(v int64) byte {
+		if v < 0 {
+			return 0
+		}
+		if v > 255 {
+			return 255
+		}
+		return byte(v)
+	}
+	return clamp(rr.Value), clamp(gg.Value), clamp(bb.Value), nil
+}
+
 func browserCreate(args ...Object) Object {
-	if len(args) < 2 {
+	if len(args) < 2 || len(args) > 3 {
 		return ErrorWithHint(currentCallToken, "окно.создать(ширина, высота [, заголовок])", "")
 	}
 	w, ok1 := args[0].(*Integer)
 	h, ok2 := args[1].(*Integer)
 	if !ok1 || !ok2 {
-		return ErrorWithHint(currentCallToken, "ширина и высота — целые", "")
+		return ErrorWithHint(currentCallToken, "ширина и высота — целые числа", "")
+	}
+	if w.Value < 64 || w.Value > 4096 || h.Value < 64 || h.Value > 4096 {
+		return ErrorWithHint(currentCallToken, "неверный размер окна",
+			"Ширина и высота должны быть в пределах 64…4096")
 	}
 	title := "Завет"
-	if len(args) >= 3 {
-		if s, ok := args[2].(*String); ok {
-			title = s.Value
+	if len(args) == 3 {
+		s, ok := args[2].(*String)
+		if !ok {
+			return builtinErrorWrongArgType("окно.создать", 3, "STRING", string(args[2].Type()))
 		}
+		title = s.Value
 	}
+
+	browserCloseActive()
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return ErrorWithHint(currentCallToken, "не смог открыть порт: "+err.Error(), "")
@@ -116,8 +184,14 @@ func browserCreate(args ...Object) Object {
 		open:   true,
 		title:  title,
 		addr:   ln.Addr().String(),
+		ln:     ln,
+	}
+	// Непрозрачный чёрный фон по умолчанию (alpha = 255)
+	for i := 3; i < len(bw.pixels); i += 4 {
+		bw.pixels[i] = 255
 	}
 	bwin = bw
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", bw.serveHTML)
 	mux.HandleFunc("/frame.png", bw.servePNG)
@@ -128,13 +202,20 @@ func browserCreate(args ...Object) Object {
 		bw.mu.Unlock()
 		w.WriteHeader(204)
 	})
-	go http.Serve(ln, mux)
+	go func() {
+		_ = http.Serve(ln, mux)
+	}()
 	url := "http://" + bw.addr + "/"
 	_ = openBrowser(url)
 	return NULL
 }
 
 func (bw *browserWin) serveHTML(w http.ResponseWriter, r *http.Request) {
+	bw.mu.Lock()
+	title := bw.title
+	bwWidth, bwHeight := bw.w, bw.h
+	bw.mu.Unlock()
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden}
@@ -144,8 +225,10 @@ canvas{image-rendering:pixelated;border:1px solid #333;cursor:crosshair}</style>
 const c=document.getElementById('c'),x=c.getContext('2d');
 c.focus();
 const state={keys:{},mx:0,my:0,left:false,right:false,lclick:false,rclick:false,wheel:0,chars:''};
-const mapKey=k=>{
-  k=k.toLowerCase();
+const mapKey=e=>{
+  if(e.code && e.code.startsWith('Key') && e.code.length===4) return e.code[3].toLowerCase();
+  if(e.code && e.code.startsWith('Digit') && e.code.length===6) return e.code[5];
+  const k=(e.key||'').toLowerCase();
   if(k===' ')return ' ';
   return k;
 };
@@ -155,14 +238,21 @@ c.onmouseup=e=>{if(e.button===0)state.left=false;if(e.button===2)state.right=fal
 c.oncontextmenu=e=>e.preventDefault();
 c.onwheel=e=>{state.wheel+=e.deltaY>0?-1:1;e.preventDefault()};
 window.onkeydown=e=>{
-  state.keys[mapKey(e.key)]=true;
+  const mk=mapKey(e);
+  if(mk)state.keys[mk]=true;
   if(e.key==='Backspace'){state.chars+='\b';e.preventDefault();return}
-  if(e.key.length===1 && !e.ctrlKey && !e.metaKey){state.chars+=e.key;e.preventDefault()}
+  if(e.key && e.key.length===1 && !e.ctrlKey && !e.metaKey){state.chars+=e.key;e.preventDefault()}
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab',' '].includes(e.key))e.preventDefault();
 };
-window.onkeyup=e=>{state.keys[mapKey(e.key)]=false};
+window.onkeyup=e=>{
+  const mk=mapKey(e);
+  if(mk)state.keys[mk]=false;
+};
 window.onblur=()=>{for(const k in state.keys)state.keys[k]=false;state.left=false;state.right=false};
+window.addEventListener('beforeunload',()=>{if(navigator.sendBeacon)navigator.sendBeacon('/close');});
+let closed=false;
 async function tick(){
+  if(closed)return;
   try{
     const img=new Image();
     img.onload=()=>x.drawImage(img,0,0);
@@ -173,29 +263,110 @@ async function tick(){
       lclick:state.lclick,rclick:state.rclick,wheel:state.wheel,chars:state.chars
     };
     state.lclick=false;state.rclick=false;state.wheel=0;state.chars='';
-    await fetch('/input',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const res=await fetch('/input',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(res.ok){
+      const info=await res.json();
+      if(info.title && document.title!==info.title)document.title=info.title;
+      if(info.open===false){closed=true;return;}
+    }
   }catch(e){}
   requestAnimationFrame(tick);
 }
 tick();
-</script></body></html>`, htmlEscape(bw.title), bw.w, bw.h)
+</script></body></html>`, htmlEscape(title), bwWidth, bwHeight)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(html))
 }
 
-func (bw *browserWin) servePNG(w http.ResponseWriter, r *http.Request) {
+// renderFrameBytes рисует PNG текущего кадра (буфер + наложенные текст и иконки).
+func (bw *browserWin) renderFrameBytes() ([]byte, error) {
 	bw.mu.Lock()
 	img := image.NewRGBA(image.Rect(0, 0, bw.w, bw.h))
 	for y := 0; y < bw.h; y++ {
 		for x := 0; x < bw.w; x++ {
 			i := (y*bw.w + x) * 4
-			img.Set(x, y, color.RGBA{R: bw.pixels[i+2], G: bw.pixels[i+1], B: bw.pixels[i], A: 255})
+			img.SetRGBA(x, y, color.RGBA{R: bw.pixels[i+2], G: bw.pixels[i+1], B: bw.pixels[i], A: 255})
 		}
 	}
+	texts := append([]browserTextDraw(nil), bw.texts...)
+	w, h := bw.w, bw.h
 	bw.mu.Unlock()
+
+	for _, td := range texts {
+		col := color.RGBA{R: td.r, G: td.g, B: td.b, A: 255}
+		if td.icon {
+			drawBrowserIcon(img, w, h, td.x, td.y, td.iconName, col)
+		} else {
+			drawBrowserText(img, w, h, td.x, td.y, td.text, col)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func drawBrowserText(img *image.RGBA, w, h, x0, y0 int, text string, col color.RGBA) {
+	cx := x0
+	for _, ch := range text {
+		glyph := pixelFont[ch]
+		if glyph == nil {
+			glyph = pixelFont['?']
+		}
+		for row := 0; row < 7 && row < len(glyph); row++ {
+			bits := glyph[row]
+			for colIdx := 0; colIdx < 5; colIdx++ {
+				if bits&(1<<(4-colIdx)) != 0 {
+					px, py := cx+colIdx, y0+row
+					if px >= 0 && py >= 0 && px < w && py < h {
+						img.SetRGBA(px, py, col)
+					}
+				}
+			}
+		}
+		cx += 6
+	}
+}
+
+func drawBrowserIcon(img *image.RGBA, w, h, x0, y0 int, iconName string, col color.RGBA) {
+	if mask, ok := pixelIcons12[iconName]; ok {
+		for dy := 0; dy < 12; dy++ {
+			row := mask[dy]
+			for dx := 0; dx < 12; dx++ {
+				if row&(1<<(11-dx)) != 0 {
+					px, py := x0+dx, y0+dy
+					if px >= 0 && py >= 0 && px < w && py < h {
+						img.SetRGBA(px, py, col)
+					}
+				}
+			}
+		}
+		return
+	}
+	// Fallback рамка для редких иконок
+	for dy := 0; dy < 12; dy++ {
+		for dx := 0; dx < 12; dx++ {
+			if (dx > 2 && dx < 9 && dy > 2 && dy < 9) || dx == 0 || dy == 0 || dx == 11 || dy == 11 {
+				px, py := x0+dx, y0+dy
+				if px >= 0 && py >= 0 && px < w && py < h {
+					img.SetRGBA(px, py, col)
+				}
+			}
+		}
+	}
+}
+
+func (bw *browserWin) servePNG(w http.ResponseWriter, r *http.Request) {
+	data, err := bw.renderFrameBytes()
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = png.Encode(w, img)
+	_, _ = w.Write(data)
 }
 
 type browserInputPayload struct {
@@ -238,48 +409,62 @@ func (bw *browserWin) serveInput(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range p.Chars {
 		bw.charBuf = append(bw.charBuf, ch)
 	}
+	resp := struct {
+		Open  bool   `json:"open"`
+		Title string `json:"title"`
+	}{Open: bw.open, Title: bw.title}
 	bw.mu.Unlock()
-	w.WriteHeader(204)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func browserClear(args ...Object) Object {
-	if bwin == nil {
-		return NULL
+	if bwin == nil || !bwin.open {
+		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
-	r, g, b := int64(0), int64(0), int64(0)
-	if len(args) >= 3 {
-		if i, ok := args[0].(*Integer); ok {
-			r = i.Value
-		}
-		if i, ok := args[1].(*Integer); ok {
-			g = i.Value
-		}
-		if i, ok := args[2].(*Integer); ok {
-			b = i.Value
-		}
+	if len(args) != 3 {
+		return builtinErrorWrongArgCount("окно.очистить", 3, len(args))
+	}
+	r, g, b, errObj := browserRGBArgs(args, "окно.очистить")
+	if errObj != nil {
+		return errObj
 	}
 	bwin.mu.Lock()
 	for i := 0; i < len(bwin.pixels); i += 4 {
-		bwin.pixels[i] = byte(b)
-		bwin.pixels[i+1] = byte(g)
-		bwin.pixels[i+2] = byte(r)
+		bwin.pixels[i] = b
+		bwin.pixels[i+1] = g
+		bwin.pixels[i+2] = r
 		bwin.pixels[i+3] = 255
 	}
+	bwin.texts = bwin.texts[:0]
 	bwin.mu.Unlock()
 	return NULL
 }
 
 func browserRect(args ...Object) Object {
-	if bwin == nil || len(args) < 7 {
-		return ErrorWithHint(currentCallToken, "прямоугольник(x,y,w,h,r,g,b)", "")
+	if bwin == nil || !bwin.open {
+		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
-	xi := int(args[0].(*Integer).Value)
-	yi := int(args[1].(*Integer).Value)
-	ww := int(args[2].(*Integer).Value)
-	hh := int(args[3].(*Integer).Value)
-	rr := byte(args[4].(*Integer).Value)
-	gg := byte(args[5].(*Integer).Value)
-	bb := byte(args[6].(*Integer).Value)
+	if len(args) != 7 {
+		return builtinErrorWrongArgCount("окно.прямоугольник", 7, len(args))
+	}
+	vals := make([]int, 4)
+	for i := 0; i < 4; i++ {
+		n, ok := args[i].(*Integer)
+		if !ok {
+			return builtinErrorWrongArgType("окно.прямоугольник", i+1, "INTEGER", string(args[i].Type()))
+		}
+		vals[i] = int(n.Value)
+	}
+	rr, gg, bb, errObj := browserRGBArgs(args[4:], "окно.прямоугольник")
+	if errObj != nil {
+		return errObj
+	}
+	xi, yi, ww, hh := vals[0], vals[1], vals[2], vals[3]
+	if ww <= 0 || hh <= 0 {
+		return NULL
+	}
 	bwin.mu.Lock()
 	for y := yi; y < yi+hh && y < bwin.h; y++ {
 		if y < 0 {
@@ -301,80 +486,69 @@ func browserRect(args ...Object) Object {
 }
 
 func browserText(args ...Object) Object {
-	// Pixel font 5x7 for ASCII — enough for URL bar on non-Windows.
-	if bwin == nil || len(args) < 6 {
-		return NULL
+	if bwin == nil || !bwin.open {
+		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
-	x0 := int(args[0].(*Integer).Value)
-	y0 := int(args[1].(*Integer).Value)
+	if len(args) != 6 {
+		return builtinErrorWrongArgCount("окно.текст", 6, len(args))
+	}
+	x0, ok := args[0].(*Integer)
+	if !ok {
+		return builtinErrorWrongArgType("окно.текст", 1, "INTEGER", string(args[0].Type()))
+	}
+	y0, ok := args[1].(*Integer)
+	if !ok {
+		return builtinErrorWrongArgType("окно.текст", 2, "INTEGER", string(args[1].Type()))
+	}
 	s, ok := args[2].(*String)
 	if !ok {
-		return NULL
+		return builtinErrorWrongArgType("окно.текст", 3, "STRING", string(args[2].Type()))
 	}
-	rr := byte(args[3].(*Integer).Value)
-	gg := byte(args[4].(*Integer).Value)
-	bb := byte(args[5].(*Integer).Value)
+	rr, gg, bb, errObj := browserRGBArgs(args[3:], "окно.текст")
+	if errObj != nil {
+		return errObj
+	}
 	bwin.mu.Lock()
-	cx := x0
-	for _, ch := range s.Value {
-		glyph := pixelFont[ch]
-		if glyph == nil {
-			glyph = pixelFont['?']
-		}
-		for row := 0; row < 7; row++ {
-			bits := glyph[row]
-			for col := 0; col < 5; col++ {
-				if bits&(1<<(4-col)) != 0 {
-					px, py := cx+col, y0+row
-					if px >= 0 && py >= 0 && px < bwin.w && py < bwin.h {
-						i := (py*bwin.w + px) * 4
-						bwin.pixels[i] = bb
-						bwin.pixels[i+1] = gg
-						bwin.pixels[i+2] = rr
-						bwin.pixels[i+3] = 255
-					}
-				}
-			}
-		}
-		cx += 6
-	}
+	bwin.texts = append(bwin.texts, browserTextDraw{
+		x: int(x0.Value), y: int(y0.Value), text: s.Value,
+		r: rr, g: gg, b: bb,
+	})
 	bwin.mu.Unlock()
 	return NULL
 }
 
 func browserIcon(args ...Object) Object {
-	// На non-Windows — заглушка: маленький квадрат вместо FA-глифа.
-	if bwin == nil || len(args) < 6 {
-		return NULL
+	if bwin == nil || !bwin.open {
+		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
-	x0, ok0 := args[0].(*Integer)
-	y0, ok1 := args[1].(*Integer)
-	name, ok2 := args[2].(*String)
-	if !ok0 || !ok1 || !ok2 {
-		return NULL
+	if len(args) != 6 {
+		return builtinErrorWrongArgCount("окно.иконка", 6, len(args))
+	}
+	x0, ok := args[0].(*Integer)
+	if !ok {
+		return builtinErrorWrongArgType("окно.иконка", 1, "INTEGER", string(args[0].Type()))
+	}
+	y0, ok := args[1].(*Integer)
+	if !ok {
+		return builtinErrorWrongArgType("окно.иконка", 2, "INTEGER", string(args[1].Type()))
+	}
+	name, ok := args[2].(*String)
+	if !ok {
+		return builtinErrorWrongArgType("окно.иконка", 3, "STRING", string(args[2].Type()))
+	}
+	rr, gg, bb, errObj := browserRGBArgs(args[3:], "окно.иконка")
+	if errObj != nil {
+		return errObj
 	}
 	if _, ok := faIconRune(name.Value); !ok {
 		return ErrorWithHint(currentCallToken, "неизвестная иконка: "+name.Value,
 			"См. окно.список_иконок() — Font Awesome Solid")
 	}
-	rr := byte(args[3].(*Integer).Value)
-	gg := byte(args[4].(*Integer).Value)
-	bb := byte(args[5].(*Integer).Value)
 	bwin.mu.Lock()
-	for dy := 0; dy < 12; dy++ {
-		for dx := 0; dx < 12; dx++ {
-			if (dx > 1 && dx < 10 && dy > 1 && dy < 10) || dx == 0 || dy == 0 || dx == 11 || dy == 11 {
-				px, py := int(x0.Value)+dx, int(y0.Value)+dy
-				if px >= 0 && py >= 0 && px < bwin.w && py < bwin.h {
-					i := (py*bwin.w + px) * 4
-					bwin.pixels[i] = bb
-					bwin.pixels[i+1] = gg
-					bwin.pixels[i+2] = rr
-					bwin.pixels[i+3] = 255
-				}
-			}
-		}
-	}
+	bwin.texts = append(bwin.texts, browserTextDraw{
+		x: int(x0.Value), y: int(y0.Value), icon: true, iconName: name.Value,
+		r: rr, g: gg, b: bb,
+	})
 	bwin.mu.Unlock()
 	return NULL
 }
@@ -393,26 +567,38 @@ func browserIconList(args ...Object) Object {
 }
 
 func browserTitle(args ...Object) Object {
-	if bwin == nil || len(args) < 1 {
-		return NULL
+	if bwin == nil || !bwin.open {
+		return ErrorWithHint(currentCallToken, "окно не создано", "")
 	}
-	if s, ok := args[0].(*String); ok {
-		bwin.mu.Lock()
-		bwin.title = s.Value
-		bwin.mu.Unlock()
+	if len(args) != 1 {
+		return builtinErrorWrongArgCount("окно.заголовок", 1, len(args))
 	}
+	s, ok := args[0].(*String)
+	if !ok {
+		return builtinErrorWrongArgType("окно.заголовок", 1, "STRING", string(args[0].Type()))
+	}
+	bwin.mu.Lock()
+	bwin.title = s.Value
+	bwin.mu.Unlock()
 	return NULL
 }
 
 func browserKey(args ...Object) Object {
-	if bwin == nil || len(args) < 1 {
-		return FALSE
+	if len(args) != 1 {
+		return builtinErrorWrongArgCount("окно.клавиша", 1, len(args))
 	}
 	name, ok := args[0].(*String)
 	if !ok {
+		return builtinErrorWrongArgType("окно.клавиша", 1, "STRING", string(args[0].Type()))
+	}
+	key, valid := normalizeBrowserKey(name.Value)
+	if !valid {
+		return ErrorWithHint(currentCallToken, "неизвестная клавиша: "+name.Value,
+			"Доступно: влево/вправо/вверх/вниз, WASD, пробел, escape, enter, r, p")
+	}
+	if bwin == nil {
 		return FALSE
 	}
-	key := normalizeBrowserKey(name.Value)
 	bwin.mu.Lock()
 	pressed := bwin.keys[key]
 	bwin.mu.Unlock()
@@ -422,36 +608,65 @@ func browserKey(args ...Object) Object {
 	return FALSE
 }
 
-func normalizeBrowserKey(k string) string {
-	k = strings.ToLower(k)
-	switch k {
+func normalizeBrowserKey(name string) (string, bool) {
+	switch name {
 	case "влево", "left":
-		return "arrowleft"
+		return "arrowleft", true
 	case "вправо", "right":
-		return "arrowright"
+		return "arrowright", true
 	case "вверх", "up":
-		return "arrowup"
+		return "arrowup", true
 	case "вниз", "down":
-		return "arrowdown"
+		return "arrowdown", true
+	case "a", "A", "ф", "Ф":
+		return "a", true
+	case "d", "D", "в", "В":
+		return "d", true
+	case "w", "W", "ц", "Ц":
+		return "w", true
+	case "s", "S", "ы", "Ы":
+		return "s", true
 	case "пробел", "space":
-		return " "
+		return " ", true
 	case "escape", "esc", "выход":
-		return "escape"
+		return "escape", true
 	case "enter", "ввод":
-		return "enter"
+		return "enter", true
 	case "backspace", "back", "стереть":
-		return "backspace"
+		return "backspace", true
 	case "tab", "таб":
-		return "tab"
+		return "tab", true
 	case "delete", "del", "удалить":
-		return "delete"
+		return "delete", true
 	case "ctrl", "control", "контроль":
-		return "control"
+		return "control", true
+	case "r", "R", "к", "К":
+		return "r", true
+	case "p", "P", "з", "З":
+		return "p", true
+	case "l", "L", "д", "Д":
+		return "l", true
+	case "t", "T", "е", "Е":
+		return "t", true
+	case "n", "N", "т", "Т":
+		return "n", true
 	case "f5":
-		return "f5"
-	default:
-		return k
+		return "f5", true
 	}
+	runes := []rune(name)
+	if len(runes) == 1 {
+		c := runes[0]
+		if c >= 'a' && c <= 'z' {
+			return string(c), true
+		}
+		if c >= 'A' && c <= 'Z' {
+			return string(c - 'A' + 'a'), true
+		}
+		if c >= '0' && c <= '9' {
+			return string(c), true
+		}
+	}
+	return "", false
 }
 
 func browserFrame(args ...Object) Object {
@@ -468,22 +683,26 @@ func browserFrame(args ...Object) Object {
 }
 
 func browserDelay(args ...Object) Object {
-	ms := int64(16)
-	if len(args) >= 1 {
-		if i, ok := args[0].(*Integer); ok {
-			ms = i.Value
-		}
+	if len(args) != 1 {
+		return builtinErrorWrongArgCount("окно.задержка", 1, len(args))
 	}
-	time.Sleep(time.Duration(ms) * time.Millisecond)
+	ms, ok := args[0].(*Integer)
+	if !ok {
+		return builtinErrorWrongArgType("окно.задержка", 1, "INTEGER", string(args[0].Type()))
+	}
+	val := ms.Value
+	if val < 0 {
+		val = 0
+	}
+	if val > 60000 {
+		val = 60000
+	}
+	time.Sleep(time.Duration(val) * time.Millisecond)
 	return NULL
 }
 
 func browserClose(args ...Object) Object {
-	if bwin != nil {
-		bwin.mu.Lock()
-		bwin.open = false
-		bwin.mu.Unlock()
-	}
+	browserCloseActive()
 	return NULL
 }
 
@@ -579,7 +798,7 @@ func browserChars(args ...Object) Object {
 	return &String{Value: s}
 }
 
-func openBrowser(url string) error {
+func defaultOpenBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -597,52 +816,4 @@ func htmlEscape(s string) string {
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, "\"", "&quot;")
 	return s
-}
-
-// Minimal 5x7 glyphs for URL bar / labels on non-Windows.
-var pixelFont = map[rune][]byte{
-	' ': {0, 0, 0, 0, 0, 0, 0},
-	'!': {0x04, 0x04, 0x04, 0x04, 0x00, 0x04, 0x00},
-	'.': {0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00},
-	'/': {0x01, 0x02, 0x04, 0x08, 0x10, 0x00, 0x00},
-	':': {0x00, 0x04, 0x00, 0x00, 0x04, 0x00, 0x00},
-	'?': {0x0E, 0x11, 0x02, 0x04, 0x00, 0x04, 0x00},
-	'-': {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},
-	'_': {0x00, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x00},
-	'0': {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E},
-	'1': {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E},
-	'2': {0x0E, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1F},
-	'3': {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E},
-	'4': {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02},
-	'5': {0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E},
-	'6': {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E},
-	'7': {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08},
-	'8': {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E},
-	'9': {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},
-	'a': {0x00, 0x00, 0x0E, 0x01, 0x0F, 0x11, 0x0F},
-	'b': {0x10, 0x10, 0x1E, 0x11, 0x11, 0x11, 0x1E},
-	'c': {0x00, 0x00, 0x0E, 0x11, 0x10, 0x11, 0x0E},
-	'd': {0x01, 0x01, 0x0F, 0x11, 0x11, 0x11, 0x0F},
-	'e': {0x00, 0x00, 0x0E, 0x11, 0x1F, 0x10, 0x0E},
-	'f': {0x06, 0x09, 0x08, 0x1C, 0x08, 0x08, 0x08},
-	'g': {0x00, 0x0F, 0x11, 0x0F, 0x01, 0x11, 0x0E},
-	'h': {0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x11},
-	'i': {0x04, 0x00, 0x0C, 0x04, 0x04, 0x04, 0x0E},
-	'j': {0x02, 0x00, 0x06, 0x02, 0x02, 0x12, 0x0C},
-	'k': {0x10, 0x10, 0x12, 0x14, 0x18, 0x14, 0x12},
-	'l': {0x0C, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E},
-	'm': {0x00, 0x00, 0x1A, 0x15, 0x15, 0x11, 0x11},
-	'n': {0x00, 0x00, 0x16, 0x19, 0x11, 0x11, 0x11},
-	'o': {0x00, 0x00, 0x0E, 0x11, 0x11, 0x11, 0x0E},
-	'p': {0x00, 0x00, 0x1E, 0x11, 0x1E, 0x10, 0x10},
-	'q': {0x00, 0x00, 0x0F, 0x11, 0x0F, 0x01, 0x01},
-	'r': {0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10},
-	's': {0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E},
-	't': {0x08, 0x08, 0x1C, 0x08, 0x08, 0x09, 0x06},
-	'u': {0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0D},
-	'v': {0x00, 0x00, 0x11, 0x11, 0x11, 0x0A, 0x04},
-	'w': {0x00, 0x00, 0x11, 0x11, 0x15, 0x15, 0x0A},
-	'x': {0x00, 0x00, 0x11, 0x0A, 0x04, 0x0A, 0x11},
-	'y': {0x00, 0x00, 0x11, 0x11, 0x0F, 0x01, 0x0E},
-	'z': {0x00, 0x00, 0x1F, 0x02, 0x04, 0x08, 0x1F},
 }

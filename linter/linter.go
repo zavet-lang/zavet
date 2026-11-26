@@ -196,6 +196,28 @@ func (ctx *lintContext) collectDefsFromExpression(expr ast.Expression) {
 			}
 		}
 		ctx.scopeDepth--
+	case *ast.WhileExpression:
+		ctx.scopeDepth++
+		if e.Body != nil {
+			for _, stmt := range e.Body.Statements {
+				ctx.collectDefsFromStatement(stmt)
+			}
+		}
+		ctx.scopeDepth--
+	case *ast.RepeatExpression:
+		ctx.scopeDepth++
+		if e.Body != nil {
+			for _, stmt := range e.Body.Statements {
+				ctx.collectDefsFromStatement(stmt)
+			}
+		}
+		ctx.scopeDepth--
+	case *ast.HashLiteral:
+		for _, k := range e.KeyOrder {
+			if v, ok := e.Pairs[k]; ok {
+				ctx.collectDefsFromExpression(v)
+			}
+		}
 	}
 }
 
@@ -313,6 +335,9 @@ func (ctx *lintContext) collectUsagesFromExpression(expr ast.Expression) {
 		}
 	case *ast.HashLiteral:
 		for k, v := range e.Pairs {
+			if ks, ok := k.(*ast.StringLiteral); ok && strings.HasPrefix(ks.Value, "__") {
+				continue
+			}
 			ctx.collectUsagesFromExpression(k)
 			ctx.collectUsagesFromExpression(v)
 		}
@@ -331,6 +356,13 @@ func (ctx *lintContext) collectUsagesFromExpression(expr ast.Expression) {
 		}
 	case *ast.WhileExpression:
 		ctx.collectUsagesFromExpression(e.Condition)
+		if e.Body != nil {
+			for _, stmt := range e.Body.Statements {
+				ctx.collectUsagesFromStatement(stmt)
+			}
+		}
+	case *ast.RepeatExpression:
+		ctx.collectUsagesFromExpression(e.Count)
 		if e.Body != nil {
 			for _, stmt := range e.Body.Statements {
 				ctx.collectUsagesFromStatement(stmt)
@@ -607,6 +639,16 @@ func (ctx *lintContext) findEmptyBlocksInExpr(expr ast.Expression, issues *[]Iss
 				Severity: Warning,
 				Code:     "empty-block",
 				Message:  "пустой блок «для»: кружить не над чем",
+			})
+		}
+	case *ast.RepeatExpression:
+		if e.Body != nil && len(e.Body.Statements) == 0 {
+			*issues = append(*issues, Issue{
+				File:     ctx.filename,
+				Line:     e.Token.Line,
+				Severity: Warning,
+				Code:     "empty-block",
+				Message:  "пустой блок «повтори»: делать нечего",
 			})
 		}
 	case *ast.FunctionLiteral:

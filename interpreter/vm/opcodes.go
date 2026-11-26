@@ -40,6 +40,7 @@ const (
 	OpBuildArray // Operand = count
 	OpIndex      // stack: arr, idx -> elem
 	OpSetIndex   // stack: arr, idx, val -> val
+	OpCheckInt   // проверяет что вершина стека — int64
 )
 
 // Instruction — одна инструкция байткода.

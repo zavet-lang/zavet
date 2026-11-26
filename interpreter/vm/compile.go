@@ -66,7 +66,7 @@ func (cp *compiler) resolveVar(name string) (int, bool) {
 // Compile компилирует программу в байткод.
 // Поддержка: числа/строки/булевы/ничего/массивы, арифметика (+ - * / // %),
 // сравнения, логика (и, или, не, !), пусть/измени/=/+=/−=/*=//=,
-// если, доколе, для i от a до b [по s], прерви, продолжи,
+// если, доколе, для i от a до b [по s], повтори N раз, прерви, продолжи,
 // слова (функции, рекурсия, аминь), индексация массивов, возгласи, длина.
 func Compile(program *ast.Program) (*Chunk, error) {
 	cp := newCompiler(nil, false)
@@ -405,6 +405,8 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 		return cp.compileIf(e)
 	case *ast.WhileExpression:
 		return cp.compileWhile(e)
+	case *ast.RepeatExpression:
+		return cp.compileRepeat(e)
 	case *ast.ForExpression:
 		return cp.compileFor(e)
 	case *ast.CallExpression:
@@ -453,6 +455,67 @@ func (cp *compiler) compileWhile(e *ast.WhileExpression) error {
 	cp.chunk.emit(OpJump, loopStart)
 	endPos := len(cp.chunk.Code)
 	cp.chunk.patch(jumpFalse, endPos)
+	for _, bj := range lp.breakJumps {
+		cp.chunk.patch(bj, endPos)
+	}
+	cp.loops = cp.loops[:len(cp.loops)-1]
+	cp.chunk.emit(OpNull, 0)
+	return nil
+}
+
+func (cp *compiler) compileRepeat(e *ast.RepeatExpression) error {
+	if err := cp.compileExpr(e.Count); err != nil {
+		return err
+	}
+	cp.chunk.emit(OpCheckInt, 0)
+
+	remName := fmt.Sprintf("__rep_rem_%d", len(cp.chunk.Code))
+	remSlot, remLocal := cp.defineVar(remName)
+	if remLocal {
+		cp.chunk.emit(OpSetLocal, remSlot)
+	} else {
+		cp.chunk.emit(OpDefineGlobal, remSlot)
+	}
+
+	loopStart := len(cp.chunk.Code)
+	lp := &loopContext{continueTarget: -1}
+	cp.loops = append(cp.loops, lp)
+
+	// Условие: rem > 0
+	if remLocal {
+		cp.chunk.emit(OpGetLocal, remSlot)
+	} else {
+		cp.chunk.emit(OpGetGlobal, remSlot)
+	}
+	cp.chunk.emit(OpConstant, cp.chunk.addConstant(int64(0)))
+	cp.chunk.emit(OpGreater, 0)
+	jumpExit := cp.chunk.emit(OpJumpIfFalse, 0)
+
+	if err := cp.compileStmt(e.Body); err != nil {
+		return err
+	}
+
+	// Цель для «продолжи»: декремент счётчика
+	decPos := len(cp.chunk.Code)
+	for _, cj := range lp.continueJumps {
+		cp.chunk.patch(cj, decPos)
+	}
+	if remLocal {
+		cp.chunk.emit(OpGetLocal, remSlot)
+	} else {
+		cp.chunk.emit(OpGetGlobal, remSlot)
+	}
+	cp.chunk.emit(OpConstant, cp.chunk.addConstant(int64(1)))
+	cp.chunk.emit(OpSub, 0)
+	if remLocal {
+		cp.chunk.emit(OpSetLocal, remSlot)
+	} else {
+		cp.chunk.emit(OpSetGlobal, remSlot)
+	}
+	cp.chunk.emit(OpJump, loopStart)
+
+	endPos := len(cp.chunk.Code)
+	cp.chunk.patch(jumpExit, endPos)
 	for _, bj := range lp.breakJumps {
 		cp.chunk.patch(bj, endPos)
 	}

@@ -1,6 +1,8 @@
 package interpreter
 
 import (
+	"fmt"
+
 	"zavet/ast"
 	"zavet/lexer"
 )
@@ -59,6 +61,15 @@ func evalInstanceIndexExpression(tok lexer.Token, instance, index Object) Object
 	}
 
 	if val, owner, ok := findMethod(chain, 0, key); ok {
+		if isStaticClassMember(chain[owner], key, val) {
+			className := "Образ"
+			if cn, hasName := chain[owner].Pairs[(&String{Value: "__name__"}).HashKey()]; hasName {
+				className = cn.Value.Inspect()
+			}
+			return ErrorWithHint(tok,
+				fmt.Sprintf("сын мой, «%s» — статичный член образа «%s»", key, className),
+				fmt.Sprintf("Обращайся через сам образ: %s.%s", className, key))
+		}
 		return bindInstanceMethod(inst, val, owner)
 	}
 
@@ -99,7 +110,7 @@ func callParentMethod(indexExpr *ast.IndexExpression, parent *Hash, node *ast.Ca
 	if start < 0 {
 		return nil
 	}
-	val, owner, found := findMethod(inst.Chain, start, nameStr.Value)
+	val, owner, found := findInstanceMethod(inst.Chain, start, nameStr.Value)
 	if !found {
 		return nil
 	}
@@ -112,4 +123,53 @@ func callParentMethod(indexExpr *ast.IndexExpression, parent *Hash, node *ast.Ca
 		return args[0]
 	}
 	return applyBoundMethod(&BoundMethod{Self: inst, Fn: fn, Owner: owner}, args, node.Token)
+}
+
+func validateClassStaticTypes(tok lexer.Token, classHash *Hash) *Error {
+	typesPair, ok := classHash.Pairs[(&String{Value: "__static_types__"}).HashKey()]
+	if !ok {
+		return nil
+	}
+	typesHash, ok := typesPair.Value.(*Hash)
+	if !ok {
+		return nil
+	}
+	for _, hp := range typesHash.orderedPairs() {
+		ks, ok1 := hp.Key.(*String)
+		ts, ok2 := hp.Value.(*String)
+		if !ok1 || !ok2 {
+			continue
+		}
+		if fPair, exists := classHash.Pairs[ks.HashKey()]; exists {
+			if err := checkTypeAnnotation(tok, ks.Value, ts.Value, fPair.Value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func checkClassStaticAssignment(tok lexer.Token, o *Hash, key string, val Object, env *Environment) *Error {
+	chain := []*Hash{o}
+	if _, hasParent := o.Pairs[(&String{Value: "__parent_name__"}).HashKey()]; hasParent && env != nil {
+		chain = classChain(o, env)
+	}
+	keyHash := (&String{Value: key}).HashKey()
+	for _, cls := range chain {
+		if hashContainsString(cls, "__static_const__", key) {
+			return ErrorCannotReassignConst(tok, key)
+		}
+		if tp, ok := cls.Pairs[(&String{Value: "__static_types__"}).HashKey()]; ok {
+			if th, ok := tp.Value.(*Hash); ok {
+				if tPair, hasType := th.Pairs[keyHash]; hasType {
+					if ts, ok := tPair.Value.(*String); ok {
+						if err := checkTypeAnnotation(tok, key, ts.Value, val); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

@@ -374,6 +374,14 @@ func (m *Machine) Run() error {
 			m.stack = m.stack[:bp-1]
 			m.stack = append(m.stack, retVal)
 
+		case OpCheckInt:
+			if len(m.stack) == 0 {
+				return fmt.Errorf("сын мой, «повтори … раз» просит целое число")
+			}
+			if _, ok := m.stack[len(m.stack)-1].(int64); !ok {
+				return fmt.Errorf("сын мой, «повтори … раз» просит целое число")
+			}
+
 		default:
 			return fmt.Errorf("неизвестный опкод %d", ins.Op)
 		}

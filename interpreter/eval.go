@@ -30,6 +30,13 @@ func Eval(node ast.Node, env *Environment) Object {
 		if isError(val) {
 			return val
 		}
+		if node.Token.Type == lexer.CLASS {
+			if classHash, ok := val.(*Hash); ok {
+				if err := validateClassStaticTypes(node.Token, classHash); err != nil {
+					return err
+				}
+			}
+		}
 		if node.TypeName != "" {
 			if err := checkTypeAnnotation(node.Token, node.Name.Value, node.TypeName, val); err != nil {
 				return err
@@ -86,7 +93,7 @@ func Eval(node ast.Node, env *Environment) Object {
 				if isError(index) {
 					return index
 				}
-				currentVal = evalIndexExpression(left.Token, obj, index)
+				currentVal = evalIndexExpressionWithEnv(left.Token, obj, index, env)
 				if isError(currentVal) {
 					return currentVal
 				}
@@ -153,6 +160,11 @@ func Eval(node ast.Node, env *Environment) Object {
 			case *Hash:
 				if _, ok := index.(Hashable); !ok {
 					return newErrorWithToken(node.Token, "ключ словаря должен быть пригоден для ключа")
+				}
+				if s, ok := index.(*String); ok {
+					if err := checkClassStaticAssignment(node.Token, o, s.Value, val, env); err != nil {
+						return err
+					}
 				}
 				o.Set(index, val)
 				return val
@@ -299,6 +311,7 @@ func Eval(node ast.Node, env *Environment) Object {
 			Env:         env,
 			Body:        body,
 			IsGenerator: containsYield(body),
+			IsStatic:    node.IsStatic,
 			Name:        fnName,
 		}
 		if node.Name != nil {
@@ -493,7 +506,7 @@ func Eval(node ast.Node, env *Environment) Object {
 		if isError(index) {
 			return index
 		}
-		return evalIndexExpression(node.Token, left, index)
+		return evalIndexExpressionWithEnv(node.Token, left, index, env)
 
 	case *ast.SliceExpression:
 		left := Eval(node.Left, env)
@@ -531,14 +544,14 @@ func Eval(node ast.Node, env *Environment) Object {
 		case *ast.Identifier:
 			// Доступ к полю: obj?.field
 			index := &String{Value: right.Value}
-			return evalIndexExpression(node.Token, left, index)
+			return evalIndexExpressionWithEnv(node.Token, left, index, env)
 			
 		case *ast.CallExpression:
 			// Вызов метода: obj?.method()
 			if ident, ok := right.Function.(*ast.Identifier); ok {
 				// Получаем метод из объекта
 				methodName := &String{Value: ident.Value}
-				method := evalIndexExpression(node.Token, left, methodName)
+				method := evalIndexExpressionWithEnv(node.Token, left, methodName, env)
 				if isError(method) {
 					return method
 				}
@@ -562,6 +575,9 @@ func Eval(node ast.Node, env *Environment) Object {
 
 	case *ast.WhileExpression:
 		return evalWhileExpression(node, env)
+
+	case *ast.RepeatExpression:
+		return evalRepeatExpression(node, env)
 
 	case *ast.HashLiteral:
 		return evalHashLiteral(node, env)

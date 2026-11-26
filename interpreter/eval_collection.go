@@ -74,13 +74,17 @@ func evalSliceExpression(tok lexer.Token, left, start, end Object) Object {
 // === Индексирование ===
 
 func evalIndexExpression(tok lexer.Token, left, index Object) Object {
+	return evalIndexExpressionWithEnv(tok, left, index, nil)
+}
+
+func evalIndexExpressionWithEnv(tok lexer.Token, left, index Object, env *Environment) Object {
 	switch {
 	case left.Type() == "ARRAY" && index.Type() == "INTEGER":
 		return evalArrayIndexExpression(tok, left, index)
 	case left.Type() == "STRING" && index.Type() == "INTEGER":
 		return evalStringIndexExpression(tok, left, index)
 	case left.Type() == "HASH":
-		return evalHashIndexExpression(tok, left, index)
+		return evalHashIndexExpressionWithEnv(tok, left, index, env)
 	case left.Type() == "INSTANCE":
 		return evalInstanceIndexExpression(tok, left, index)
 	case index.Type() == "STRING":
@@ -145,6 +149,10 @@ func evalArrayIndexExpression(tok lexer.Token, array, index Object) Object {
 }
 
 func evalHashIndexExpression(tok lexer.Token, hash, index Object) Object {
+	return evalHashIndexExpressionWithEnv(tok, hash, index, nil)
+}
+
+func evalHashIndexExpressionWithEnv(tok lexer.Token, hash, index Object, env *Environment) Object {
 	hashObject := hash.(*Hash)
 
 	key, ok := index.(Hashable)
@@ -173,11 +181,32 @@ func evalHashIndexExpression(tok lexer.Token, hash, index Object) Object {
 					return altPair.Value
 				}
 			}
+			// Статические члены образа наследуются по цепочке предков.
+			if env != nil && s.Value != "" && !isInternalClassKey(s.Value) {
+				if _, hasParent := hashObject.Pairs[(&String{Value: "__parent_name__"}).HashKey()]; hasParent {
+					chain := classChain(hashObject, env)
+					for i := 1; i < len(chain); i++ {
+						if pPair, found := chain[i].Pairs[key.HashKey()]; found {
+							if isStaticClassMember(chain[i], s.Value, pPair.Value) {
+								return pPair.Value
+							}
+						}
+					}
+				}
+			}
 		}
 		return NULL
 	}
 
 	return pair.Value
+}
+
+func isInternalClassKey(name string) bool {
+	switch name {
+	case "__name__", "__parent_name__", "__static__", "__static_const__", "__static_types__":
+		return true
+	}
+	return false
 }
 
 // === Литералы словарей ===

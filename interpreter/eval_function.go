@@ -189,12 +189,53 @@ func methodKeyAliases(name string) []string {
 	return []string{name}
 }
 
+// hashContainsString проверяет, содержит ли массив в ключе metaKey (напр. "__static__") строку name.
+func hashContainsString(class *Hash, metaKey, name string) bool {
+	pair, ok := class.Pairs[(&String{Value: metaKey}).HashKey()]
+	if !ok {
+		return false
+	}
+	arr, ok := pair.Value.(*Array)
+	if !ok {
+		return false
+	}
+	for _, el := range arr.Elements {
+		if s, ok := el.(*String); ok && s.Value == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isStaticClassMember проверяет, является ли ключ статическим членом класса.
+func isStaticClassMember(class *Hash, name string, val Object) bool {
+	if fn, ok := val.(*Function); ok && fn.IsStatic {
+		return true
+	}
+	return hashContainsString(class, "__static__", name)
+}
+
 // findMethod ищет метод по цепочке начиная с индекса start.
 // Возвращает значение и индекс класса, где оно найдено.
 func findMethod(chain []*Hash, start int, name string) (Object, int, bool) {
 	for i := start; i < len(chain); i++ {
 		for _, key := range methodKeyAliases(name) {
 			if pair, ok := chain[i].Pairs[(&String{Value: key}).HashKey()]; ok {
+				return pair.Value, i, true
+			}
+		}
+	}
+	return nil, -1, false
+}
+
+// findInstanceMethod ищет нестатический метод экземпляра по цепочке классов.
+func findInstanceMethod(chain []*Hash, start int, name string) (Object, int, bool) {
+	for i := start; i < len(chain); i++ {
+		for _, key := range methodKeyAliases(name) {
+			if pair, ok := chain[i].Pairs[(&String{Value: key}).HashKey()]; ok {
+				if isStaticClassMember(chain[i], key, pair.Value) {
+					continue
+				}
 				return pair.Value, i, true
 			}
 		}
@@ -218,7 +259,7 @@ func instantiateClass(class *Hash, args []Object, tok lexer.Token, env *Environm
 		parentHash = chain[1]
 	}
 
-	initVal, initOwner, hasInit := findMethod(chain, 0, "инициализация")
+	initVal, initOwner, hasInit := findInstanceMethod(chain, 0, "инициализация")
 	if !force && !hasInit && parentHash == nil {
 		return ErrorNotCallable(tok, class.Type())
 	}
@@ -412,6 +453,11 @@ func containsYield(node ast.Node) bool {
 		}
 		return containsYield(n.Body)
 	case *ast.WhileExpression:
+		if n == nil {
+			return false
+		}
+		return containsYield(n.Body)
+	case *ast.RepeatExpression:
 		if n == nil {
 			return false
 		}

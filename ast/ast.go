@@ -250,6 +250,7 @@ type FunctionLiteral struct {
 	Body       *BlockStatement
 	IsInline   bool // true если форма "функция f(x): выражение"
 	IsLambda   bool // true если в исходнике это была лямбда (x => тело)
+	IsStatic   bool // true для "статичная слово" внутри образа
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
@@ -368,6 +369,17 @@ type WhileExpression struct {
 func (we *WhileExpression) expressionNode()      {}
 func (we *WhileExpression) TokenLiteral() string { return we.Token.Literal }
 
+// RepeatExpression - повтори N раз <блок> конец
+type RepeatExpression struct {
+	Token    lexer.Token
+	Count    Expression
+	Body     *BlockStatement
+	IsInline bool
+}
+
+func (re *RepeatExpression) expressionNode()      {}
+func (re *RepeatExpression) TokenLiteral() string { return re.Token.Literal }
+
 // HashLiteral - словарь {"ключ": значение}.
 // Pairs хранит соответствие, KeyOrder — порядок появления в исходнике
 // (нужен, чтобы при выводе словаря ключи были в порядке вставки).
@@ -484,6 +496,7 @@ func (oe *OptionalExpression) GetToken() lexer.Token   { return oe.Token }
 func (fe *ForExpression) GetToken() lexer.Token        { return fe.Token }
 func (fie *ForInExpression) GetToken() lexer.Token     { return fie.Token }
 func (we *WhileExpression) GetToken() lexer.Token      { return we.Token }
+func (re *RepeatExpression) GetToken() lexer.Token     { return re.Token }
 func (hl *HashLiteral) GetToken() lexer.Token          { return hl.Token }
 func (te *TryExpression) GetToken() lexer.Token        { return te.Token }
 func (ts *ThrowStatement) GetToken() lexer.Token       { return ts.Token }
