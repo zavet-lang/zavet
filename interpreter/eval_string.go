@@ -28,13 +28,28 @@ func evalInterpolatedString(tok lexer.Token, template string, env *Environment) 
 			continue
 		}
 		if template[i] == '{' {
-			// Находим закрывающую скобку с учётом вложенности.
+			// Находим закрывающую скобку с учётом вложенности и строковых литералов.
 			j := i + 1
 			depth := 1
+			var inQuote byte
 			for j < len(template) && depth > 0 {
-				if template[j] == '{' {
+				ch := template[j]
+				if inQuote != 0 {
+					if ch == '\\' && j+1 < len(template) {
+						j += 2
+						continue
+					}
+					if ch == inQuote {
+						inQuote = 0
+					}
+					j++
+					continue
+				}
+				if ch == '\'' || ch == '"' {
+					inQuote = ch
+				} else if ch == '{' {
 					depth++
-				} else if template[j] == '}' {
+				} else if ch == '}' {
 					depth--
 				}
 				j++

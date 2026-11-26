@@ -1181,14 +1181,16 @@ func quote(s string) string {
 		s = s[1:]
 	}
 
-	// Многострочная строка без интерполяции — оставляем как есть.
-	// Это критично для SQL, шаблонов писем, JSON-литералов и т.п.,
-	// где разработчик специально оформил строку в несколько строк.
-	if !hasInterpolation && strings.Contains(s, "\n") {
-		// Проверяем что не содержит ` или " подряд — иначе придётся экранировать.
-		// Двойные кавычки внутри уже корректно работают если их нет на стыках.
-		if !strings.Contains(s, `"`) {
-			return `"` + s + `"`
+	// Строки без интерполяции, содержащие { или } (например HTML/CSS/шаблоны
+	// '{{заголовок}}' или регулярки '[\p{L}]+'), сериализуем в одинарных
+	// кавычках, если в них нет одинарной кавычки и \r — иначе при повторном
+	// парсинге двойные кавычки запустят строгую интерполяцию.
+	if !hasInterpolation && (strings.ContainsAny(s, "{}") || strings.Contains(s, "\n")) {
+		if !strings.ContainsRune(s, '\'') && !strings.ContainsRune(s, '\r') && !strings.ContainsRune(s, '\\') {
+			return "'" + s + "'"
+		}
+		if strings.Contains(s, "\n") && !strings.Contains(s, `"""`) {
+			return `"""` + s + `"""`
 		}
 	}
 
@@ -1196,6 +1198,15 @@ func quote(s string) string {
 	sb.WriteByte('"')
 	braceDepth := 0
 	for _, r := range s {
+		// Восстанавливаем экранированные \{ и \} из маркеров лексера.
+		if r == '\x01' {
+			sb.WriteString(`\{`)
+			continue
+		}
+		if r == '\x02' {
+			sb.WriteString(`\}`)
+			continue
+		}
 		// Внутри интерполяции отслеживаем баланс {} и не экранируем.
 		if hasInterpolation {
 			if r == '{' {
@@ -1214,6 +1225,10 @@ func quote(s string) string {
 			}
 		}
 		switch r {
+		case '{':
+			sb.WriteString(`\{`)
+		case '}':
+			sb.WriteString(`\}`)
 		case '"':
 			sb.WriteString(`\"`)
 		case '\\':

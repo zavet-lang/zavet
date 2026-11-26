@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"io"
 	"math/rand"
 	"net"
@@ -84,12 +85,12 @@ func parseHTTPTimeout(obj Object, fnName string) (time.Duration, Object) {
 	switch v := obj.(type) {
 	case *Integer:
 		if v.Value <= 0 {
-			return 0, ErrorWithHint(currentCallToken, fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
+			return 0, ErrorWithHint(getCurrentCallToken(), fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
 		}
 		return time.Duration(v.Value) * time.Second, nil
 	case *Float:
 		if v.Value <= 0 {
-			return 0, ErrorWithHint(currentCallToken, fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
+			return 0, ErrorWithHint(getCurrentCallToken(), fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
 		}
 		return time.Duration(v.Value * float64(time.Second)), nil
 	default:
@@ -104,7 +105,7 @@ func parseHTTPTimeout(obj Object, fnName string) (time.Duration, Object) {
 func httpRequest(method string, args []Object) Object {
 	fnName := "http." + strings.ToLower(method)
 	if len(args) < 1 {
-		return ErrorWithHint(currentCallToken,
+		return ErrorWithHint(getCurrentCallToken(),
 			fnName+"(url, [тело], [заголовки], [таймаут_сек])",
 			"")
 	}
@@ -183,7 +184,7 @@ func httpRequest(method string, args []Object) Object {
 
 	req, err := http.NewRequest(method, urlStr.Value, body)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "не смог сотворить запрос: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "не смог сотворить запрос: "+err.Error(), "")
 	}
 
 	// Заголовки по умолчанию
@@ -202,16 +203,25 @@ func httpRequest(method string, args []Object) Object {
 	client := &http.Client{
 		Timeout:   timeout,
 		Transport: httpDefaultTransport(),
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("слишком много перенаправлений (10)")
+			}
+			if errObj := CheckHost(req.URL.String()); errObj != nil {
+				return errors.New(errObj.Inspect())
+			}
+			return nil
+		},
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "не смог выполнить запрос: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "не смог выполнить запрос: "+err.Error(), "")
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "не смог прочесть ответ: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "не смог прочесть ответ: "+err.Error(), "")
 	}
 
 	// Возвращаем словарь {статус, тело, заголовки, url}
@@ -336,7 +346,7 @@ func registerHttpModule() {
 		"отправить": func(args ...Object) Object {
 			// http.отправить(метод, url, [тело], [заголовки])
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"http.отправить(метод, url, [тело], [заголовки])", "")
 			}
 			method, ok := args[0].(*String)
@@ -361,7 +371,7 @@ func registerCsvModule() {
 			r := csv.NewReader(strings.NewReader(s))
 			records, e := r.ReadAll()
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "грех CSV: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех CSV: "+e.Error(), "")
 			}
 			outer := make([]Object, 0, len(records))
 			for _, row := range records {
@@ -381,7 +391,7 @@ func registerCsvModule() {
 			r := csv.NewReader(strings.NewReader(s))
 			records, e := r.ReadAll()
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "грех CSV: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех CSV: "+e.Error(), "")
 			}
 			if len(records) == 0 {
 				return &Array{Elements: []Object{}}
@@ -453,7 +463,7 @@ func registerRandomModule() {
 				return builtinErrorWrongArgType("случайное.целое", 2, "INTEGER", string(args[1].Type()))
 			}
 			if hi.Value < lo.Value {
-				return ErrorWithHint(currentCallToken, "max должен быть не меньше min", "")
+				return ErrorWithHint(getCurrentCallToken(), "max должен быть не меньше min", "")
 			}
 			return &Integer{Value: lo.Value + rng.Int63n(hi.Value-lo.Value+1)}
 		},
@@ -467,7 +477,7 @@ func registerRandomModule() {
 				return builtinErrorWrongArgType("случайное.элемент", 1, "ARRAY", string(args[0].Type()))
 			}
 			if len(arr.Elements) == 0 {
-				return ErrorWithHint(currentCallToken, "пустое стадо", "")
+				return ErrorWithHint(getCurrentCallToken(), "пустое стадо", "")
 			}
 			return arr.Elements[rng.Intn(len(arr.Elements))]
 		},
@@ -541,7 +551,7 @@ func extendOsModule() {
 		}
 		out, err := exec.Command(cmd.Value, cmdArgs...).Output()
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог запустить: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог запустить: "+err.Error(), "")
 		}
 		return &String{Value: string(out)}
 	})

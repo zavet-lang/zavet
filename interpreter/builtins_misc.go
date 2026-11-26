@@ -13,7 +13,7 @@ func init() {
 				return builtinErrorWrongArgCount("ошибка", 1, len(args))
 			}
 			return ErrorWithHint(
-				currentCallToken,
+				getCurrentCallToken(),
 				args[0].Inspect(),
 				"Сия ошибка возложена явно словом 'ошибка()'.",
 			)
@@ -28,7 +28,7 @@ func init() {
 				return builtinErrorWrongArgType("загрузить", 1, "STRING (строка)", args[0].Type())
 			}
 			// Эта функция будет вызываться из eval.go с доступом к env
-   return ErrorWithHint(currentCallToken, "внутренний грех: загрузить() призвано неверно", "Сей грех в самом толкователе, а не в тебе.")
+   return ErrorWithHint(getCurrentCallToken(), "внутренний грех: загрузить() призвано неверно", "Сей грех в самом толкователе, а не в тебе.")
 		},
 	}
 	builtins["установить"] = &Builtin{
@@ -37,10 +37,10 @@ func init() {
 				return builtinErrorWrongArgCount("установить", 3, len(args))
 			}
 			if args[0].Type() != "INSTANCE" {
-    return ErrorWithHint(currentCallToken, "первое приношение должно быть экземпляром образа", "Принеси объект образа.")
+    return ErrorWithHint(getCurrentCallToken(), "первое приношение должно быть экземпляром образа", "Принеси объект образа.")
 			}
 			if args[1].Type() != "STRING" {
-    return ErrorWithHint(currentCallToken, "второе приношение должно быть строкой", "Принеси строку вторым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "второе приношение должно быть строкой", "Принеси строку вторым приношением.")
 			}
 			
 			inst := args[0].(*Instance)
@@ -71,14 +71,14 @@ func init() {
 	builtins["__проверить__"] = &Builtin{
 		Fn: func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "«проверить» потребно условие", "")
+				return ErrorWithHint(getCurrentCallToken(), "«проверить» потребно условие", "")
 			}
 			cond := args[0]
 			if cond.Type() == "BOOLEAN" && !cond.(*Boolean).Value {
-				return ErrorWithHint(currentCallToken, "испытание не пройдено", "")
+				return ErrorWithHint(getCurrentCallToken(), "испытание не пройдено", "")
 			}
 			if cond.Type() == "NULL" {
-				return ErrorWithHint(currentCallToken, "испытание не пройдено: значение пусто", "")
+				return ErrorWithHint(getCurrentCallToken(), "испытание не пройдено: значение пусто", "")
 			}
 			return NULL
 		},

@@ -29,6 +29,10 @@ type Environment struct {
 	// immutable-имён, lazy-инициализация map — оправдана.
 	immutable map[string]bool
 
+	// Явные аннотации типов для изменяемых переменных (измени x: Тип = …),
+	// чтобы проверять их и при последующем переприсваивании.
+	types map[string]string
+
 	// Экспорты для механизма модулей.
 	exports map[string]Object
 
@@ -157,6 +161,34 @@ func (e *Environment) IsImmutable(name string) bool {
 		return e.outer.IsImmutable(name)
 	}
 	return false
+}
+
+// SetType сохраняет явную аннотацию типа для переменной в текущем scope.
+func (e *Environment) SetType(name, typeName string) {
+	if typeName == "" {
+		if e.types != nil {
+			delete(e.types, name)
+		}
+		return
+	}
+	if e.types == nil {
+		e.types = make(map[string]string, 4)
+	}
+	e.types[name] = typeName
+}
+
+// GetType возвращает аннотацию типа переменной из того scope, где она объявлена.
+func (e *Environment) GetType(name string) string {
+	if _, here := e.localGet(name); here {
+		if e.types != nil {
+			return e.types[name]
+		}
+		return ""
+	}
+	if e.outer != nil {
+		return e.outer.GetType(name)
+	}
+	return ""
 }
 
 // Export помечает переменную как экспортированную для модулей.

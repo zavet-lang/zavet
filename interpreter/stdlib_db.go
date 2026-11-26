@@ -5,10 +5,37 @@ package interpreter
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	_ "modernc.org/sqlite" // pure Go SQLite — без CGo
 )
+
+var (
+	reSQLBlockComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
+	reSQLLineComment  = regexp.MustCompile(`--[^\r\n]*`)
+	reSQLSingleQuote  = regexp.MustCompile(`'(?:''|[^'])*'`)
+	reSQLUnsafeOp     = regexp.MustCompile(`(?i)\b(attach|detach|load_extension)\b`)
+)
+
+// checkSafeSQL запрещает в --безопасный SQL-операции, способные выйти
+// за пределы песочницы файлов (ATTACH/DETACH DATABASE, load_extension).
+func checkSafeSQL(sqlStr string) Object {
+	if !SafeMode {
+		return nil
+	}
+	cleaned := reSQLBlockComment.ReplaceAllString(sqlStr, " ")
+	cleaned = reSQLLineComment.ReplaceAllString(cleaned, " ")
+	cleaned = reSQLSingleQuote.ReplaceAllString(cleaned, "''")
+	if m := reSQLUnsafeOp.FindString(cleaned); m != "" {
+		return ErrorWithHint(
+			getCurrentCallToken(),
+			"SQL-операция «"+strings.ToUpper(m)+"» запретна в безопасном стане",
+			"Запусти без --безопасный, коли доверяешь сему свитку.",
+		)
+	}
+	return nil
+}
 
 // === Модуль "бд" ===
 //
@@ -45,7 +72,7 @@ func objectsToArgs(args []Object) ([]any, *Error) {
 			result[i] = nil
 		default:
 			return nil, ErrorWithHint(
-				currentCallToken,
+				getCurrentCallToken(),
 				fmt.Sprintf("параметр %d: вид %s не принимается (нужно целое, дробное, строка, булево или ничего)", i+1, translateType(string(a.Type()))),
 				"",
 			)
@@ -84,11 +111,14 @@ func goValueToObject(v any) Object {
 
 func dbDoExec(exec dbExecutor, args []Object) Object {
 	if len(args) < 1 {
-		return ErrorWithHint(currentCallToken, "выполнить потребен SQL-запрос", "выполнить(\"INSERT ...\", знач1, знач2)")
+		return ErrorWithHint(getCurrentCallToken(), "выполнить потребен SQL-запрос", "выполнить(\"INSERT ...\", знач1, знач2)")
 	}
 	sqlStr, ok := args[0].(*String)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "первое приношение должно быть строкой SQL", "")
+		return ErrorWithHint(getCurrentCallToken(), "первое приношение должно быть строкой SQL", "")
+	}
+	if errObj := checkSafeSQL(sqlStr.Value); errObj != nil {
+		return errObj
 	}
 	params, errArg := objectsToArgs(args[1:])
 	if errArg != nil {
@@ -96,7 +126,7 @@ func dbDoExec(exec dbExecutor, args []Object) Object {
 	}
 	res, err := exec.Exec(sqlStr.Value, params...)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех SQL: "+err.Error(), "Вникни в строение запроса и приношения.")
+		return ErrorWithHint(getCurrentCallToken(), "грех SQL: "+err.Error(), "Вникни в строение запроса и приношения.")
 	}
 	insertID, _ := res.LastInsertId()
 	affected, _ := res.RowsAffected()
@@ -108,11 +138,14 @@ func dbDoExec(exec dbExecutor, args []Object) Object {
 
 func dbDoQuery(exec dbExecutor, args []Object) Object {
 	if len(args) < 1 {
-		return ErrorWithHint(currentCallToken, "запрос потребен с SQL", "")
+		return ErrorWithHint(getCurrentCallToken(), "запрос потребен с SQL", "")
 	}
 	sqlStr, ok := args[0].(*String)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "первое приношение должно быть строкой SQL", "")
+		return ErrorWithHint(getCurrentCallToken(), "первое приношение должно быть строкой SQL", "")
+	}
+	if errObj := checkSafeSQL(sqlStr.Value); errObj != nil {
+		return errObj
 	}
 	params, errArg := objectsToArgs(args[1:])
 	if errArg != nil {
@@ -120,13 +153,13 @@ func dbDoQuery(exec dbExecutor, args []Object) Object {
 	}
 	rows, err := exec.Query(sqlStr.Value, params...)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех SQL: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех SQL: "+err.Error(), "")
 	}
 	defer rows.Close()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "не смог прочесть колонки: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "не смог прочесть колонки: "+err.Error(), "")
 	}
 
 	result := []Object{}
@@ -137,7 +170,7 @@ func dbDoQuery(exec dbExecutor, args []Object) Object {
 			ptrs[i] = &values[i]
 		}
 		if err := rows.Scan(ptrs...); err != nil {
-			return ErrorWithHint(currentCallToken, "не смог прочесть строку: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог прочесть строку: "+err.Error(), "")
 		}
 		row := NewHash()
 		for i, col := range cols {
@@ -180,9 +213,12 @@ func dbDoScalar(exec dbExecutor, args []Object) Object {
 // === Prepared Statements ===
 
 func newPreparedStatement(db *sql.DB, sqlStr string) Object {
+	if errObj := checkSafeSQL(sqlStr); errObj != nil {
+		return errObj
+	}
 	stmt, err := db.Prepare(sqlStr)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех подготовки: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех подготовки: "+err.Error(), "")
 	}
 
 	h := NewHash()
@@ -196,7 +232,7 @@ func newPreparedStatement(db *sql.DB, sqlStr string) Object {
 		}
 		res, err := stmt.Exec(params...)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "грех выполнения: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех выполнения: "+err.Error(), "")
 		}
 		insertID, _ := res.LastInsertId()
 		affected, _ := res.RowsAffected()
@@ -214,12 +250,12 @@ func newPreparedStatement(db *sql.DB, sqlStr string) Object {
 		}
 		rows, err := stmt.Query(params...)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог выполнить запрос: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог выполнить запрос: "+err.Error(), "")
 		}
 		defer rows.Close()
 		cols, err := rows.Columns()
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "грех колонок: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех колонок: "+err.Error(), "")
 		}
 		result := []Object{}
 		for rows.Next() {
@@ -229,7 +265,7 @@ func newPreparedStatement(db *sql.DB, sqlStr string) Object {
 				ptrs[i] = &values[i]
 			}
 			if err := rows.Scan(ptrs...); err != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть: "+err.Error(), "")
 			}
 			row := NewHash()
 			for i, col := range cols {
@@ -253,26 +289,26 @@ func newPreparedStatement(db *sql.DB, sqlStr string) Object {
 
 func dbBatchInsert(db *sql.DB, args []Object) Object {
 	if len(args) < 3 {
-		return ErrorWithHint(currentCallToken, "вставить_много(таблица, колонки, данные)", "вставить_много(\"люди\", [\"имя\", \"возраст\"], [[\"Анна\", 25], [\"Иван\", 30]])")
+		return ErrorWithHint(getCurrentCallToken(), "вставить_много(таблица, колонки, данные)", "вставить_много(\"люди\", [\"имя\", \"возраст\"], [[\"Анна\", 25], [\"Иван\", 30]])")
 	}
 	tableName, ok := args[0].(*String)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "первое приношение — имя таблицы (строка)", "")
+		return ErrorWithHint(getCurrentCallToken(), "первое приношение — имя таблицы (строка)", "")
 	}
 	colsArr, ok := args[1].(*Array)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "второе приношение — стадо имён колонок", "")
+		return ErrorWithHint(getCurrentCallToken(), "второе приношение — стадо имён колонок", "")
 	}
 	dataArr, ok := args[2].(*Array)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "третье приношение — стадо стад значений", "")
+		return ErrorWithHint(getCurrentCallToken(), "третье приношение — стадо стад значений", "")
 	}
 
 	cols := make([]string, len(colsArr.Elements))
 	for i, c := range colsArr.Elements {
 		s, ok := c.(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, fmt.Sprintf("колонка %d должна быть строкой", i+1), "")
+			return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("колонка %d должна быть строкой", i+1), "")
 		}
 		cols[i] = s.Value
 	}
@@ -286,7 +322,7 @@ func dbBatchInsert(db *sql.DB, args []Object) Object {
 
 	stmt, err := db.Prepare(sqlStr)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех подготовки: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех подготовки: "+err.Error(), "")
 	}
 	defer stmt.Close()
 
@@ -294,7 +330,7 @@ func dbBatchInsert(db *sql.DB, args []Object) Object {
 	for rowIdx, rowObj := range dataArr.Elements {
 		rowArr, ok := rowObj.(*Array)
 		if !ok {
-			return ErrorWithHint(currentCallToken, fmt.Sprintf("строка %d должна быть стадом", rowIdx+1), "")
+			return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("строка %d должна быть стадом", rowIdx+1), "")
 		}
 		params, errArg := objectsToArgs(rowArr.Elements)
 		if errArg != nil {
@@ -302,7 +338,7 @@ func dbBatchInsert(db *sql.DB, args []Object) Object {
 		}
 		res, err := stmt.Exec(params...)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, fmt.Sprintf("грех вставки строки %d: %s", rowIdx+1, err.Error()), "")
+			return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("грех вставки строки %d: %s", rowIdx+1, err.Error()), "")
 		}
 		n, _ := res.RowsAffected()
 		totalAffected += n
@@ -318,7 +354,7 @@ func dbBatchInsert(db *sql.DB, args []Object) Object {
 func dbTables(db *sql.DB) Object {
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех: "+err.Error(), "")
 	}
 	defer rows.Close()
 	result := []Object{}
@@ -332,15 +368,15 @@ func dbTables(db *sql.DB) Object {
 
 func dbColumns(db *sql.DB, args []Object) Object {
 	if len(args) != 1 {
-		return ErrorWithHint(currentCallToken, "колонки(таблица) — укажи имя таблицы", "")
+		return ErrorWithHint(getCurrentCallToken(), "колонки(таблица) — укажи имя таблицы", "")
 	}
 	tableName, ok := args[0].(*String)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "приношение должно быть строкой", "")
+		return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой", "")
 	}
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName.Value))
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех: "+err.Error(), "")
 	}
 	defer rows.Close()
 	result := []Object{}
@@ -379,15 +415,18 @@ func dbMigrate(db *sql.DB, args []Object) Object {
 	db.Exec("CREATE TABLE IF NOT EXISTS __миграции__ (версия INTEGER PRIMARY KEY, применена TEXT DEFAULT (datetime('now')))")
 
 	if len(args) != 2 {
-		return ErrorWithHint(currentCallToken, "мигрировать(версия, sql)", "мигрировать(1, \"CREATE TABLE ...\")")
+		return ErrorWithHint(getCurrentCallToken(), "мигрировать(версия, sql)", "мигрировать(1, \"CREATE TABLE ...\")")
 	}
 	versionObj, ok := args[0].(*Integer)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "версия должна быть целым числом", "")
+		return ErrorWithHint(getCurrentCallToken(), "версия должна быть целым числом", "")
 	}
 	sqlStr, ok := args[1].(*String)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "второе приношение — SQL-запрос (строка)", "")
+		return ErrorWithHint(getCurrentCallToken(), "второе приношение — SQL-запрос (строка)", "")
+	}
+	if errObj := checkSafeSQL(sqlStr.Value); errObj != nil {
+		return errObj
 	}
 
 	// Проверяем применена ли уже
@@ -401,7 +440,7 @@ func dbMigrate(db *sql.DB, args []Object) Object {
 	// Применяем
 	_, err := db.Exec(sqlStr.Value)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, fmt.Sprintf("грех миграции %d: %s", versionObj.Value, err.Error()), "")
+		return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("грех миграции %d: %s", versionObj.Value, err.Error()), "")
 	}
 	db.Exec("INSERT INTO __миграции__ (версия) VALUES (?)", versionObj.Value)
 	return TRUE // применена
@@ -454,11 +493,11 @@ func newDBConnection(db *sql.DB, path string) *Hash {
 	// транзакция(функция(тх) ...)
 	h.Set(&String{Value: "транзакция"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 || (args[0].Type() != "FUNCTION" && args[0].Type() != "BUILTIN") {
-			return ErrorWithHint(currentCallToken, "транзакция потребна одной функции", "транзакция(функция(тх) ... конец)")
+			return ErrorWithHint(getCurrentCallToken(), "транзакция потребна одной функции", "транзакция(функция(тх) ... конец)")
 		}
 		tx, err := db.Begin()
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог начать транзакцию: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог начать транзакцию: "+err.Error(), "")
 		}
 		txHash := makeExecutorMethods(tx)
 		result := ApplyFunctionCallback(args[0], []Object{txHash})
@@ -467,7 +506,7 @@ func newDBConnection(db *sql.DB, path string) *Hash {
 			return result
 		}
 		if err := tx.Commit(); err != nil {
-			return ErrorWithHint(currentCallToken, "не смог зафиксировать: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог зафиксировать: "+err.Error(), "")
 		}
 		return result
 	}})
@@ -475,11 +514,11 @@ func newDBConnection(db *sql.DB, path string) *Hash {
 	// подготовить(sql) → prepared statement
 	h.Set(&String{Value: "подготовить"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "подготовить(sql)", "")
+			return ErrorWithHint(getCurrentCallToken(), "подготовить(sql)", "")
 		}
 		s, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "приношение должно быть строкой SQL", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой SQL", "")
 		}
 		return newPreparedStatement(db, s.Value)
 	}})
@@ -516,28 +555,41 @@ func registerDBModule() {
 	fns := map[string]func(args ...Object) Object{
 		"открыть": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "открыть потребен путь к файлу или ':memory:'", "бд.открыть(\"данные.db\")")
+				return ErrorWithHint(getCurrentCallToken(), "открыть потребен путь к файлу или ':memory:'", "бд.открыть(\"данные.db\")")
 			}
 			path, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "путь должен быть строкой", "")
+				return ErrorWithHint(getCurrentCallToken(), "путь должен быть строкой", "")
 			}
 			if path.Value != ":memory:" {
+				if SafeMode {
+					trimmed := strings.ToLower(strings.TrimSpace(path.Value))
+					if strings.HasPrefix(trimmed, "file:") || strings.Contains(path.Value, "?") {
+						return ErrorWithHint(
+							getCurrentCallToken(),
+							"SQLite URI «"+path.Value+"» запретен в безопасном стане",
+							"Указывай обычный путь внутри песочницы или ':memory:'.",
+						)
+					}
+				}
 				if err := CheckPath(path.Value); err != nil {
 					return err
 				}
 			}
 			db, err := sql.Open("sqlite", path.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог открыть БД: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог открыть БД: "+err.Error(), "")
 			}
 			if err := db.Ping(); err != nil {
 				db.Close()
-				return ErrorWithHint(currentCallToken, "не смог подключиться: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог подключиться: "+err.Error(), "")
 			}
 			// WAL mode для лучшей производительности при параллельных чтениях
 			db.Exec("PRAGMA journal_mode=WAL")
 			db.Exec("PRAGMA foreign_keys=ON")
+			if SafeMode {
+				db.Exec("PRAGMA trusted_schema=OFF")
+			}
 			return newDBConnection(db, path.Value)
 		},
 	}

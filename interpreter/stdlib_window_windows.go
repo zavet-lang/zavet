@@ -462,17 +462,17 @@ func registerWindowModule() {
 				title = t.Value
 			}
 			if wObj.Value < 64 || hObj.Value < 64 || wObj.Value > 4096 || hObj.Value > 4096 {
-				return ErrorWithHint(currentCallToken, "размер окна за пределами 64…4096", "")
+				return ErrorWithHint(getCurrentCallToken(), "размер окна за пределами 64…4096", "")
 			}
 
 			closeActiveWindow()
 			if err := ensureWindowClass(); err != nil {
-				return ErrorWithHint(currentCallToken, "не смог зарегистрировать образ окна: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог зарегистрировать образ окна: "+err.Error(), "")
 			}
 
 			titlePtr, err := windows.UTF16PtrFromString(title)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), err.Error(), "")
 			}
 			classPtr, _ := windows.UTF16PtrFromString("ZavetWindow")
 			hInstance, _, _ := procGetModuleHandleW.Call(0)
@@ -494,7 +494,7 @@ func registerWindowModule() {
 				0, 0, hInstance, 0,
 			)
 			if hwndU == 0 {
-				return ErrorWithHint(currentCallToken, fmt.Sprintf("CreateWindowExW: %v", callErr), "")
+				return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("CreateWindowExW: %v", callErr), "")
 			}
 			hwnd := windows.HWND(hwndU)
 
@@ -522,7 +522,7 @@ func registerWindowModule() {
 
 		"очистить": func(args ...Object) Object {
 			if activeWindow == nil || activeWindow.closed {
-				return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+				return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 			}
 			if len(args) != 3 {
 				return builtinErrorWrongArgCount("окно.очистить", 3, len(args))
@@ -544,7 +544,7 @@ func registerWindowModule() {
 
 		"прямоугольник": func(args ...Object) Object {
 			if activeWindow == nil || activeWindow.closed {
-				return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+				return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 			}
 			if len(args) != 7 {
 				return builtinErrorWrongArgCount("окно.прямоугольник", 7, len(args))
@@ -567,7 +567,7 @@ func registerWindowModule() {
 
 		"текст": func(args ...Object) Object {
 			if activeWindow == nil || activeWindow.closed {
-				return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+				return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 			}
 			if len(args) != 6 {
 				return builtinErrorWrongArgCount("окно.текст", 6, len(args))
@@ -596,7 +596,7 @@ func registerWindowModule() {
 
 		"заголовок": func(args ...Object) Object {
 			if activeWindow == nil || activeWindow.hwnd == 0 {
-				return ErrorWithHint(currentCallToken, "окно не создано", "")
+				return ErrorWithHint(getCurrentCallToken(), "окно не создано", "")
 			}
 			if len(args) != 1 {
 				return builtinErrorWrongArgCount("окно.заголовок", 1, len(args))
@@ -611,7 +611,7 @@ func registerWindowModule() {
 			activeWindow.lastTitle = s.Value
 			ptr, err := windows.UTF16PtrFromString(s.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), err.Error(), "")
 			}
 			procSetWindowTextW.Call(uintptr(activeWindow.hwnd), uintptr(unsafe.Pointer(ptr)))
 			return NULL
@@ -627,7 +627,7 @@ func registerWindowModule() {
 			}
 			vk, ok := keyToVK(s.Value)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "неизвестная клавиша: "+s.Value,
+				return ErrorWithHint(getCurrentCallToken(), "неизвестная клавиша: "+s.Value,
 					"Доступно: влево/вправо/вверх/вниз, WASD, пробел, escape, enter, r, p")
 			}
 			state, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
@@ -662,7 +662,7 @@ func registerWindowModule() {
 
 		"иконка": func(args ...Object) Object {
 			if activeWindow == nil || activeWindow.closed {
-				return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+				return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 			}
 			if len(args) != 6 {
 				return builtinErrorWrongArgCount("окно.иконка", 6, len(args))
@@ -685,7 +685,7 @@ func registerWindowModule() {
 			}
 			ch, ok := faIconRune(name.Value)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "неизвестная иконка: "+name.Value,
+				return ErrorWithHint(getCurrentCallToken(), "неизвестная иконка: "+name.Value,
 					"См. окно.список_иконок() — Font Awesome Solid")
 			}
 			activeWindow.texts = append(activeWindow.texts, textDraw{

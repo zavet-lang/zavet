@@ -78,7 +78,7 @@ func (d *Debugger) BeforeStatement(stmt ast.Statement, env *Environment) *Error 
 		return nil
 	}
 
-	depth := len(callStack)
+	depth := callStackDepth()
 	shouldPause := false
 	if d.breakpoints[line] {
 		shouldPause = true
@@ -114,7 +114,7 @@ func (d *Debugger) prompt(line int, env *Environment) *Error {
 		if raw == "" {
 			// Enter повторяет шаг
 			d.mode = debugStepOver
-			d.targetDepth = len(callStack)
+			d.targetDepth = callStackDepth()
 			return nil
 		}
 		parts := strings.Fields(raw)
@@ -127,11 +127,11 @@ func (d *Debugger) prompt(line int, env *Environment) *Error {
 			return nil
 		case "далее", "n", "next":
 			d.mode = debugStepOver
-			d.targetDepth = len(callStack)
+			d.targetDepth = callStackDepth()
 			return nil
 		case "выйти", "o", "out":
 			d.mode = debugStepOut
-			d.targetDepth = len(callStack)
+			d.targetDepth = callStackDepth()
 			return nil
 		case "продолжить", "c", "cont":
 			d.mode = debugContinue
@@ -197,13 +197,14 @@ func (d *Debugger) prompt(line int, env *Environment) *Error {
 			}
 			ActiveDebugger = prev
 		case "стек", "bt", "stack":
-			if len(callStack) == 0 {
+			snap := callStackSnapshot()
+			if len(snap) == 0 {
 				fmt.Fprintf(d.out, "  <верхний уровень> — %s:%d\n", d.filename, line)
 				continue
 			}
-			for i := len(callStack) - 1; i >= 0; i-- {
-				f := callStack[i]
-				fmt.Fprintf(d.out, "  %d. %s — %s:%d\n", len(callStack)-i, f.FunctionName, f.CallToken.Filename, f.CallToken.Line)
+			for i := len(snap) - 1; i >= 0; i-- {
+				f := snap[i]
+				fmt.Fprintf(d.out, "  %d. %s — %s:%d\n", len(snap)-i, f.FunctionName, f.CallToken.Filename, f.CallToken.Line)
 			}
 		case "код", "l", "list":
 			d.printContext(line, 3)

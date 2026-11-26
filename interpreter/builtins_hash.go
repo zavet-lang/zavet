@@ -40,7 +40,7 @@ func init() {
 	builtins["получить"] = &Builtin{
 		Fn: func(args ...Object) Object {
 			if len(args) < 2 || len(args) > 3 {
-				return ErrorWithHint(currentCallToken, "получить(хеш, ключ[, по_умолчанию])", "")
+				return ErrorWithHint(getCurrentCallToken(), "получить(хеш, ключ[, по_умолчанию])", "")
 			}
 			hash, ok := args[0].(*Hash)
 			if !ok {
@@ -48,7 +48,7 @@ func init() {
 			}
 			hashable, ok := args[1].(Hashable)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "ключ должен быть пригоден для словаря", "")
+				return ErrorWithHint(getCurrentCallToken(), "ключ должен быть пригоден для словаря", "")
 			}
 			if pair, found := hash.Pairs[hashable.HashKey()]; found {
 				return pair.Value

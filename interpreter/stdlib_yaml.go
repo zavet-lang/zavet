@@ -24,7 +24,7 @@ func registerYAMLModule() {
 			}
 			obj, err := parseYAML(s.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "скрижали YAML начертаны неверно: "+err.Error(), "Вникни в отступы и двоеточия YAML.")
+				return ErrorWithHint(getCurrentCallToken(), "скрижали YAML начертаны неверно: "+err.Error(), "Вникни в отступы и двоеточия YAML.")
 			}
 			return obj
 		},

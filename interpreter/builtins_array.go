@@ -29,12 +29,12 @@ func init() {
 				return builtinErrorWrongArgCount("удалить", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "INTEGER" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо, вторым — целое число", "Употребляй: функция(массив, индекс)")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо, вторым — целое число", "Употребляй: функция(массив, индекс)")
 			}
 			arr := args[0].(*Array)
 			idx := int(args[1].(*Integer).Value)
 			if idx < 0 || idx >= len(arr.Elements) {
-    return ErrorWithHint(currentCallToken, "индекс за пределами стада", "Вникни, что индекс в пределах стада.")
+    return ErrorWithHint(getCurrentCallToken(), "индекс за пределами стада", "Вникни, что индекс в пределах стада.")
 			}
 			// Изменяем массив напрямую
 			arr.Elements = append(arr.Elements[:idx], arr.Elements[idx+1:]...)
@@ -47,12 +47,12 @@ func init() {
 				return builtinErrorWrongArgCount("вставить", 3, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "INTEGER" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо, вторым — целое число", "Употребляй: функция(массив, индекс)")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо, вторым — целое число", "Употребляй: функция(массив, индекс)")
 			}
 			arr := args[0].(*Array)
 			idx := int(args[1].(*Integer).Value)
 			if idx < 0 || idx > len(arr.Elements) {
-    return ErrorWithHint(currentCallToken, "индекс за пределами стада", "Вникни, что индекс в пределах стада.")
+    return ErrorWithHint(getCurrentCallToken(), "индекс за пределами стада", "Вникни, что индекс в пределах стада.")
 			}
 			// Изменяем массив напрямую
 			newElements := make([]Object, 0, len(arr.Elements)+1)
@@ -69,7 +69,7 @@ func init() {
 				return builtinErrorWrongArgCount("сортировать", 1, len(args))
 			}
 			if args[0].Type() != "ARRAY" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
 			}
 			
 			arr := args[0].(*Array)
@@ -79,7 +79,7 @@ func init() {
 			// Если передана функция сравнения
 			if len(args) == 2 {
 				if args[1].Type() != "FUNCTION" {
-     return ErrorWithHint(currentCallToken, "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
+     return ErrorWithHint(getCurrentCallToken(), "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
 				}
 				
 				compareFn := args[1].(*Function)
@@ -156,7 +156,7 @@ func init() {
 			
 			// Для массивов - найти элемент по условию
 			if args[0].Type() != "ARRAY" || args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "потребны стадо и слово", "Употребляй: функция(массив, функция)")
+    return ErrorWithHint(getCurrentCallToken(), "потребны стадо и слово", "Употребляй: функция(массив, функция)")
 			}
 			
 			arr := args[0].(*Array)
@@ -180,7 +180,7 @@ func init() {
 				return builtinErrorWrongArgCount("найти_индекс", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
+    return ErrorWithHint(getCurrentCallToken(), "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
 			}
 			
 			arr := args[0].(*Array)
@@ -204,7 +204,7 @@ func init() {
 				return builtinErrorWrongArgCount("все", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
+    return ErrorWithHint(getCurrentCallToken(), "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
 			}
 			
 			arr := args[0].(*Array)
@@ -228,7 +228,7 @@ func init() {
 				return builtinErrorWrongArgCount("любой", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
+    return ErrorWithHint(getCurrentCallToken(), "приношения должны быть: стадо и слово", "Употребляй: функция(массив, функция)")
 			}
 			
 			arr := args[0].(*Array)
@@ -265,7 +265,7 @@ func init() {
 				case *Float:
 					sum += v.Value
 				default:
-     return ErrorWithHint(currentCallToken, "стадо должно хранить только числа", "Вникни, что все элементы стада — числа.")
+     return ErrorWithHint(getCurrentCallToken(), "стадо должно хранить только числа", "Вникни, что все элементы стада — числа.")
 				}
 			}
 			
@@ -290,7 +290,7 @@ func init() {
 				return builtinErrorWrongArgCount("взять", 2, len(args))
 			}
 			if args[1].Type() != "INTEGER" {
-				return ErrorWithHint(currentCallToken, "второе приношение должно быть целым числом", "взять(массив|генератор, n)")
+				return ErrorWithHint(getCurrentCallToken(), "второе приношение должно быть целым числом", "взять(массив|генератор, n)")
 			}
 			count := int(args[1].(*Integer).Value)
 			if count < 0 {
@@ -325,7 +325,7 @@ func init() {
 				return builtinErrorWrongArgCount("пропустить", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "INTEGER" {
-    return ErrorWithHint(currentCallToken, "приношения должны быть: стадо и целое число", "Употребляй: функция(массив, число)")
+    return ErrorWithHint(getCurrentCallToken(), "приношения должны быть: стадо и целое число", "Употребляй: функция(массив, число)")
 			}
 			
 			arr := args[0].(*Array)
@@ -347,10 +347,10 @@ func init() {
 				return builtinErrorWrongArgCount("преобразовать", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
 			}
 			if args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
 			}
 			
 			arr := args[0].(*Array)
@@ -372,10 +372,10 @@ func init() {
 				return builtinErrorWrongArgCount("фильтр", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
 			}
 			if args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
 			}
 			
 			arr := args[0].(*Array)
@@ -400,10 +400,10 @@ func init() {
 				return builtinErrorWrongArgCount("дляКаждого", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
 			}
 			if args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
 			}
 			
 			arr := args[0].(*Array)
@@ -423,10 +423,10 @@ func init() {
 				return builtinErrorWrongArgCount("свернуть", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо", "Принеси стадо первым приношением.")
 			}
 			if args[1].Type() != "FUNCTION" {
-    return ErrorWithHint(currentCallToken, "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
+    return ErrorWithHint(getCurrentCallToken(), "вторым приношением должно быть слово", "Принеси слово вторым приношением.")
 			}
 			
 			arr := args[0].(*Array)

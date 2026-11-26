@@ -86,11 +86,11 @@ func init() {
 		},
 		"спать": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "время.спать(миллисекунды)", "")
+				return ErrorWithHint(getCurrentCallToken(), "время.спать(миллисекунды)", "")
 			}
 			ms, ok := args[0].(*Integer)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "потребно целое число (миллисекунды)", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно целое число (миллисекунды)", "")
 			}
 			time.Sleep(time.Duration(ms.Value) * time.Millisecond)
 			return NULL
@@ -108,81 +108,81 @@ func init() {
 	matFns := map[string]func(args ...Object) Object{
 		"sin": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.sin(x)", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.sin(x)", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Sin(*x)}
 		},
 		"cos": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.cos(x)", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.cos(x)", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Cos(*x)}
 		},
 		"tan": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.tan(x)", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.tan(x)", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Tan(*x)}
 		},
 		"лог": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.лог(x) - натуральный логарифм", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.лог(x) - натуральный логарифм", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Log(*x)}
 		},
 		"лог2": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.лог2(x)", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.лог2(x)", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Log2(*x)}
 		},
 		"лог10": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.лог10(x)", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.лог10(x)", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Log10(*x)}
 		},
 		"пол": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.пол(x) - округление вниз", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.пол(x) - округление вниз", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Floor(*x)}
 		},
 		"потолок": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken, "мат.потолок(x) - округление вверх", "")
+				return ErrorWithHint(getCurrentCallToken(), "мат.потолок(x) - округление вверх", "")
 			}
 			x := toFloat(args[0])
 			if x == nil {
-				return ErrorWithHint(currentCallToken, "потребно число", "")
+				return ErrorWithHint(getCurrentCallToken(), "потребно число", "")
 			}
 			return &Float{Value: math.Ceil(*x)}
 		},

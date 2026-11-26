@@ -14,7 +14,7 @@ func init() {
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "STRING" {
 				return ErrorWithHint(
-					currentCallToken,
+					getCurrentCallToken(),
 					"слово «разделить» просит два приношения вида STRING (строка)",
 					"Употребляй: разделить(\"текст\", \"разделитель\")",
 				)
@@ -35,7 +35,7 @@ func init() {
 				return builtinErrorWrongArgCount("соединить", 2, len(args))
 			}
 			if args[0].Type() != "ARRAY" || args[1].Type() != "STRING" {
-    return ErrorWithHint(currentCallToken, "первым приношением должно быть стадо, вторым — строка", "Употребляй: функция(массив, \"строка\")")
+    return ErrorWithHint(getCurrentCallToken(), "первым приношением должно быть стадо, вторым — строка", "Употребляй: функция(массив, \"строка\")")
 			}
 			arr := args[0].(*Array)
 			sep := args[1].(*String).Value
@@ -52,7 +52,7 @@ func init() {
 				return builtinErrorWrongArgCount("заменить", 3, len(args))
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "STRING" || args[2].Type() != "STRING" {
-    return ErrorWithHint(currentCallToken, "все приношения должны быть строками", "Принеси строки.")
+    return ErrorWithHint(getCurrentCallToken(), "все приношения должны быть строками", "Принеси строки.")
 			}
 			str := args[0].(*String).Value
 			old := args[1].(*String).Value
@@ -88,13 +88,13 @@ func init() {
 				return builtinErrorWrongArgCount("подстрока", 3, len(args))
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "INTEGER" || args[2].Type() != "INTEGER" {
-				return ErrorWithHint(currentCallToken, "аргументы должны быть: строка, целое число, целое число", "Вникни в виды приношений.")
+				return ErrorWithHint(getCurrentCallToken(), "аргументы должны быть: строка, целое число, целое число", "Вникни в виды приношений.")
 			}
 			runes := []rune(args[0].(*String).Value)
 			start := int(args[1].(*Integer).Value)
 			end := int(args[2].(*Integer).Value)
 			if start < 0 || end > len(runes) || start > end {
-				return ErrorWithHint(currentCallToken, "неверные индексы", "Индексы должны быть в пределах строки, а начало не больше конца.")
+				return ErrorWithHint(getCurrentCallToken(), "неверные индексы", "Индексы должны быть в пределах строки, а начало не больше конца.")
 			}
 			return &String{Value: string(runes[start:end])}
 		},
@@ -116,7 +116,7 @@ func init() {
 				return builtinErrorWrongArgCount("начинается_с", 2, len(args))
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "STRING" {
-    return ErrorWithHint(currentCallToken, "все приношения должны быть строками", "Принеси строки.")
+    return ErrorWithHint(getCurrentCallToken(), "все приношения должны быть строками", "Принеси строки.")
 			}
 			str := args[0].(*String).Value
 			prefix := args[1].(*String).Value
@@ -132,7 +132,7 @@ func init() {
 				return builtinErrorWrongArgCount("заканчивается_на", 2, len(args))
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "STRING" {
-    return ErrorWithHint(currentCallToken, "все приношения должны быть строками", "Принеси строки.")
+    return ErrorWithHint(getCurrentCallToken(), "все приношения должны быть строками", "Принеси строки.")
 			}
 			str := args[0].(*String).Value
 			suffix := args[1].(*String).Value
@@ -155,7 +155,7 @@ func init() {
 					}
 					return FALSE
 				}
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"для строки 'содержит' нужна строка-подстрока",
 					"Пример: \"привет мир\".содержит(\"мир\")")
 			}
@@ -186,12 +186,12 @@ func init() {
 				return builtinErrorWrongArgCount("повторить", 2, len(args))
 			}
 			if args[0].Type() != "STRING" || args[1].Type() != "INTEGER" {
-    return ErrorWithHint(currentCallToken, "аргументы должны быть: строка и целое число", "Вникни в виды приношений.")
+    return ErrorWithHint(getCurrentCallToken(), "аргументы должны быть: строка и целое число", "Вникни в виды приношений.")
 			}
 			str := args[0].(*String).Value
 			count := int(args[1].(*Integer).Value)
 			if count < 0 {
-    return ErrorWithHint(currentCallToken, "число повторений не может быть отрицательным", "Употребляй положительное число.")
+    return ErrorWithHint(getCurrentCallToken(), "число повторений не может быть отрицательным", "Употребляй положительное число.")
 			}
 			return &String{Value: strings.Repeat(str, count)}
 		},

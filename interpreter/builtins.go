@@ -20,7 +20,7 @@ var ApplyFunctionCallback func(Object, []Object) Object
 // Вспомогательные функции для ошибок встроенных функций
 func builtinErrorWrongArgCount(funcName string, expected, got int) *Error {
 	return ErrorWithHint(
-		currentCallToken,
+		getCurrentCallToken(),
 		fmt.Sprintf("слову «%s» надлежит принять %d приношение(й), принесено %d", funcName, expected, got),
 		fmt.Sprintf("Призови слово верно: %s(...)", funcName),
 	)
@@ -28,7 +28,7 @@ func builtinErrorWrongArgCount(funcName string, expected, got int) *Error {
 
 func builtinErrorWrongArgType(funcName string, argNum int, expected, got string) *Error {
 	return ErrorWithHint(
-		currentCallToken,
+		getCurrentCallToken(),
 		fmt.Sprintf("слово «%s»: приношение %d должно быть %s, а дано %s", funcName, argNum, expected, got),
 		fmt.Sprintf("Принеси значение вида %s", expected),
 	)
@@ -36,7 +36,7 @@ func builtinErrorWrongArgType(funcName string, argNum int, expected, got string)
 
 func builtinErrorUnsupportedType(funcName string, got string) *Error {
 	return ErrorWithHint(
-		currentCallToken,
+		getCurrentCallToken(),
 		fmt.Sprintf("слово «%s» не принимает вид %s", funcName, got),
 		"Вникни в виды приношений.",
 	)
@@ -46,8 +46,8 @@ func builtinErrorUnsupportedType(funcName string, got string) *Error {
 func newBuiltinError(format string, a ...interface{}) *Error {
 	return &Error{
 		Message: fmt.Sprintf(format, a...),
-		Line:    currentCallToken.Line,
-		Column:  currentCallToken.Column,
+		Line:    getCurrentCallToken().Line,
+		Column:  getCurrentCallToken().Column,
 	}
 }
 

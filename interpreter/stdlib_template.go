@@ -23,11 +23,11 @@ func registerTemplateModule() {
 	fns := map[string]func(args ...Object) Object{
 		"рендер": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "рендер(шаблон, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "рендер(шаблон, [данные])", "")
 			}
 			tmpl, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "первый аргумент — строка шаблона", "")
+				return ErrorWithHint(getCurrentCallToken(), "первый аргумент — строка шаблона", "")
 			}
 			var data *Hash
 			if len(args) >= 2 {
@@ -37,24 +37,24 @@ func registerTemplateModule() {
 			}
 			result, err := renderTemplate(tmpl.Value, data, "")
 			if err != nil {
-				return ErrorWithHint(currentCallToken, err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), err.Error(), "")
 			}
 			return &String{Value: result}
 		},
 		"файл": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "файл(путь, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "файл(путь, [данные])", "")
 			}
 			path, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "первый аргумент — путь к файлу", "")
+				return ErrorWithHint(getCurrentCallToken(), "первый аргумент — путь к файлу", "")
 			}
 			if err := CheckPath(path.Value); err != nil {
 				return err
 			}
 			content, e := os.ReadFile(path.Value)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть шаблон: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть шаблон: "+e.Error(), "")
 			}
 			var data *Hash
 			if len(args) >= 2 {
@@ -70,7 +70,7 @@ func registerTemplateModule() {
 			}
 			result, err := renderTemplate(string(content), data, baseDir)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), err.Error(), "")
 			}
 			return &String{Value: result}
 		},

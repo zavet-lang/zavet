@@ -59,7 +59,7 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 	case *Hash:
 		return instantiateClass(fn, args, tok, env, false)
 	case *BoundMethod:
-		return applyBoundMethod(fn, args, tok)
+		return applyBoundMethod(fn, args, tok, env)
 
 	case *Function:
 		// Генератор запускается в горутине, возвращает Generator.
@@ -69,10 +69,8 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 			gen := &Generator{Ch: ch, Done: done}
 
 			extendedEnv := extendFunctionEnv(fn, args)
-			for paramIdx, param := range fn.Parameters {
-				if paramIdx < len(args) {
-					extendedEnv.Set(param.Value, args[paramIdx])
-				}
+			if env != nil {
+				extendedEnv.callDepth = env.callDepth + 1
 			}
 			extendedEnv.Set("__gen_ch__", &GenChannel{Ch: ch, Done: done})
 
@@ -87,8 +85,12 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 			return gen
 		}
 
-		// Защита от бесконечной рекурсии.
-		currentDepth := fn.Env.callDepth
+		// Защита от бесконечной рекурсии без мутации fn.Env
+		// (сохраняет лексический скоуп и потокобезопасность в асинх).
+		currentDepth := 0
+		if env != nil {
+			currentDepth = env.callDepth
+		}
 		if currentDepth >= MaxCallDepth {
 			return ErrorWithHint(
 				tok,
@@ -100,11 +102,6 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 		extendedEnv := NewEnclosedEnvironment(fn.Env)
 		extendedEnv.callDepth = currentDepth + 1
 
-		// Временно подменяем Env у функции, чтобы рекурсивные
-		// вызовы видели увеличенную глубину.
-		oldEnv := fn.Env
-		fn.Env = extendedEnv
-
 		bindParams(fn, args, extendedEnv)
 
 		// Проверка опциональных аннотаций типов параметров
@@ -112,7 +109,6 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 			if i < len(fn.ParamTypes) && fn.ParamTypes[i] != "" {
 				if val, ok := extendedEnv.Get(param.Value); ok {
 					if err := checkTypeAnnotation(tok, param.Value, fn.ParamTypes[i], val); err != nil {
-						fn.Env = oldEnv
 						return err
 					}
 				}
@@ -128,8 +124,6 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 		evaluated := Eval(fn.Body, extendedEnv)
 		popFrame()
 
-		fn.Env = oldEnv
-
 		result := unwrapReturnValue(evaluated)
 		if !isError(result) && fn.ReturnType != "" {
 			retLabel := fnName
@@ -142,7 +136,7 @@ func applyFunction(fn Object, args []Object, tok lexer.Token, env *Environment) 
 		}
 		return result
 	case *Builtin:
-		currentCallToken = tok
+		setCurrentCallToken(tok)
 		return fn.Fn(args...)
 	default:
 		return ErrorNotCallable(tok, fn.Type())
@@ -274,7 +268,7 @@ func instantiateClass(class *Hash, args []Object, tok lexer.Token, env *Environm
 
 	if hasInit {
 		if initFunc, ok := initVal.(*Function); ok {
-			result := applyBoundMethod(&BoundMethod{Self: instance, Fn: initFunc, Owner: initOwner}, args, tok)
+			result := applyBoundMethod(&BoundMethod{Self: instance, Fn: initFunc, Owner: initOwner}, args, tok, env)
 			if isError(result) {
 				return result
 			}
@@ -283,9 +277,12 @@ func instantiateClass(class *Hash, args []Object, tok lexer.Token, env *Environm
 	return instance
 }
 
-func applyBoundMethod(m *BoundMethod, args []Object, tok lexer.Token) Object {
+func applyBoundMethod(m *BoundMethod, args []Object, tok lexer.Token, callerEnv *Environment) Object {
 	f := m.Fn
-	currentDepth := f.Env.callDepth
+	currentDepth := 0
+	if callerEnv != nil {
+		currentDepth = callerEnv.callDepth
+	}
 	if currentDepth >= MaxCallDepth {
 		return ErrorWithHint(
 			tok,
@@ -300,14 +297,11 @@ func applyBoundMethod(m *BoundMethod, args []Object, tok lexer.Token) Object {
 	if m.Self != nil && m.Owner+1 < len(m.Self.Chain) {
 		extendedEnv.Set("родитель", m.Self.Chain[m.Owner+1])
 	}
-	oldEnv := f.Env
-	f.Env = extendedEnv
 	bindParams(f, args, extendedEnv)
 	for i, param := range f.Parameters {
 		if i < len(f.ParamTypes) && f.ParamTypes[i] != "" {
 			if val, ok := extendedEnv.Get(param.Value); ok {
 				if err := checkTypeAnnotation(tok, param.Value, f.ParamTypes[i], val); err != nil {
-					f.Env = oldEnv
 					return err
 				}
 			}
@@ -320,7 +314,6 @@ func applyBoundMethod(m *BoundMethod, args []Object, tok lexer.Token) Object {
 	pushFrame(fnName, tok)
 	evaluated := Eval(f.Body, extendedEnv)
 	popFrame()
-	f.Env = oldEnv
 	res := unwrapReturnValue(evaluated)
 	if !isError(res) && f.ReturnType != "" {
 		if err := checkTypeAnnotation(tok, "возврат "+fnName, f.ReturnType, res); err != nil {
@@ -401,7 +394,7 @@ func applyFunctionFromBuiltin(fn Object, args []Object) Object {
 	case *Builtin:
 		return fn.Fn(args...)
 	case *BoundMethod:
-		return applyBoundMethod(fn, args, currentCallToken)
+		return applyBoundMethod(fn, args, getCurrentCallToken(), fn.Fn.Env)
 	default:
 		return newError("не слово: %s", fn.Type())
 	}

@@ -362,6 +362,7 @@ func (l *Lexer) readString(quote rune) string {
 	hasInterpolation := false
 	hasEscapedBrace := false
 	braceDepth := 0
+	var nestedQuote rune // активная кавычка (' или ") внутри {...}
 
 	// Читаем строку и проверяем интерполяцию
 	for {
@@ -373,59 +374,92 @@ func (l *Lexer) readString(quote rune) string {
 		if l.ch == quote && braceDepth == 0 {
 			break
 		}
-		if l.ch == '\\' {
-			if braceDepth == 0 {
-				l.readChar()
-				if quote == '\'' {
-					// В одинарных кавычках обрабатываем только \' и \\;
-					// остальные \x сохраняются как \x (удобно для регулярных выражений).
-					switch l.ch {
-					case '\'':
-						result = append(result, '\'')
-					case '\\':
-						result = append(result, '\\')
-					default:
-						result = append(result, '\\', l.ch)
+		if braceDepth > 0 {
+			// Внутри интерполяции {…} отслеживаем вложенные строковые литералы,
+			// чтобы '{' и '}' внутри них не ломали баланс скобок.
+			if l.ch == '\\' {
+				if quote == '"' && l.peekChar() == '"' {
+					// Допускаем \" внутри {...} как обычную кавычку строки
+					l.readChar()
+					if nestedQuote == 0 {
+						nestedQuote = '"'
+					} else if nestedQuote == '"' {
+						nestedQuote = 0
 					}
-				} else {
-					switch l.ch {
-					case 'n':
-						result = append(result, '\n')
-					case 't':
-						result = append(result, '\t')
-					case 'r':
-						result = append(result, '\r')
-					case 'b':
-						result = append(result, '\b')
-					case '"':
-						result = append(result, '"')
-					case '\'':
-						result = append(result, '\'')
-					case '\\':
-						result = append(result, '\\')
-					case '{':
-						hasEscapedBrace = true
-						result = append(result, '\x01')
-					case '}':
-						hasEscapedBrace = true
-						result = append(result, '\x02')
-					default:
-						result = append(result, l.ch)
-					}
+					result = append(result, '"')
+					continue
 				}
-			} else if quote == '"' && l.peekChar() == '"' {
-				// Внутри интерполяции {…} допускаем \" как "
-				l.readChar()
-				result = append(result, '"')
-			} else {
 				result = append(result, l.ch)
+				if nestedQuote != 0 && l.peekChar() != 0 {
+					l.readChar()
+					result = append(result, l.ch)
+				}
+				continue
+			}
+			if nestedQuote != 0 {
+				if l.ch == nestedQuote {
+					nestedQuote = 0
+				}
+				result = append(result, l.ch)
+				continue
+			}
+			if l.ch == '\'' || l.ch == '"' {
+				nestedQuote = l.ch
+				result = append(result, l.ch)
+				continue
+			}
+			if l.ch == '{' {
+				braceDepth++
+			} else if l.ch == '}' {
+				braceDepth--
+			}
+			result = append(result, l.ch)
+			continue
+		}
+
+		if l.ch == '\\' {
+			l.readChar()
+			if quote == '\'' {
+				// В одинарных кавычках обрабатываем только \' и \\;
+				// остальные \x сохраняются как \x (удобно для регулярных выражений).
+				switch l.ch {
+				case '\'':
+					result = append(result, '\'')
+				case '\\':
+					result = append(result, '\\')
+				default:
+					result = append(result, '\\', l.ch)
+				}
+			} else {
+				switch l.ch {
+				case 'n':
+					result = append(result, '\n')
+				case 't':
+					result = append(result, '\t')
+				case 'r':
+					result = append(result, '\r')
+				case 'b':
+					result = append(result, '\b')
+				case '"':
+					result = append(result, '"')
+				case '\'':
+					result = append(result, '\'')
+				case '\\':
+					result = append(result, '\\')
+				case '{':
+					hasEscapedBrace = true
+					result = append(result, '\x01')
+				case '}':
+					hasEscapedBrace = true
+					result = append(result, '\x02')
+				default:
+					result = append(result, l.ch)
+				}
 			}
 		} else {
 			if l.ch == '{' && quote == '"' {
 				hasInterpolation = true
 				braceDepth++
-			} else if l.ch == '}' && quote == '"' && braceDepth > 0 {
-				braceDepth--
 			}
 			result = append(result, l.ch)
 		}
@@ -449,10 +483,10 @@ func (l *Lexer) readString(quote rune) string {
 	return string(result)
 }
 
-// readMultilineString читает многострочный литерал """..."""
+// readMultilineString читает многострочный литерал """...""" без интерполяции
+// (удобно для HTML, CSS, SQL, JSON и шаблонов с {{...}}).
 func (l *Lexer) readMultilineString() string {
 	var result []rune
-	hasInterpolation := false
 	for {
 		l.readChar()
 		if l.ch == 0 {
@@ -466,14 +500,8 @@ func (l *Lexer) readMultilineString() string {
 			}
 			result = append(result, '"', '"')
 		} else {
-			if l.ch == '{' {
-				hasInterpolation = true
-			}
 			result = append(result, l.ch)
 		}
-	}
-	if hasInterpolation {
-		return "\x00" + string(result)
 	}
 	return string(result)
 }

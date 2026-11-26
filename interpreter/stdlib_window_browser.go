@@ -151,15 +151,15 @@ func browserRGBArgs(args []Object, fn string) (byte, byte, byte, *Error) {
 
 func browserCreate(args ...Object) Object {
 	if len(args) < 2 || len(args) > 3 {
-		return ErrorWithHint(currentCallToken, "окно.создать(ширина, высота [, заголовок])", "")
+		return ErrorWithHint(getCurrentCallToken(), "окно.создать(ширина, высота [, заголовок])", "")
 	}
 	w, ok1 := args[0].(*Integer)
 	h, ok2 := args[1].(*Integer)
 	if !ok1 || !ok2 {
-		return ErrorWithHint(currentCallToken, "ширина и высота — целые числа", "")
+		return ErrorWithHint(getCurrentCallToken(), "ширина и высота — целые числа", "")
 	}
 	if w.Value < 64 || w.Value > 4096 || h.Value < 64 || h.Value > 4096 {
-		return ErrorWithHint(currentCallToken, "неверный размер окна",
+		return ErrorWithHint(getCurrentCallToken(), "неверный размер окна",
 			"Ширина и высота должны быть в пределах 64…4096")
 	}
 	title := "Завет"
@@ -175,7 +175,7 @@ func browserCreate(args ...Object) Object {
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "не смог открыть порт: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "не смог открыть порт: "+err.Error(), "")
 	}
 	bw := &browserWin{
 		w: int(w.Value), h: int(h.Value),
@@ -421,7 +421,7 @@ func (bw *browserWin) serveInput(w http.ResponseWriter, r *http.Request) {
 
 func browserClear(args ...Object) Object {
 	if bwin == nil || !bwin.open {
-		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+		return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
 	if len(args) != 3 {
 		return builtinErrorWrongArgCount("окно.очистить", 3, len(args))
@@ -444,7 +444,7 @@ func browserClear(args ...Object) Object {
 
 func browserRect(args ...Object) Object {
 	if bwin == nil || !bwin.open {
-		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+		return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
 	if len(args) != 7 {
 		return builtinErrorWrongArgCount("окно.прямоугольник", 7, len(args))
@@ -487,7 +487,7 @@ func browserRect(args ...Object) Object {
 
 func browserText(args ...Object) Object {
 	if bwin == nil || !bwin.open {
-		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+		return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
 	if len(args) != 6 {
 		return builtinErrorWrongArgCount("окно.текст", 6, len(args))
@@ -519,7 +519,7 @@ func browserText(args ...Object) Object {
 
 func browserIcon(args ...Object) Object {
 	if bwin == nil || !bwin.open {
-		return ErrorWithHint(currentCallToken, "окно не создано", "Сначала вызовите окно.создать(...)")
+		return ErrorWithHint(getCurrentCallToken(), "окно не создано", "Сначала вызовите окно.создать(...)")
 	}
 	if len(args) != 6 {
 		return builtinErrorWrongArgCount("окно.иконка", 6, len(args))
@@ -541,7 +541,7 @@ func browserIcon(args ...Object) Object {
 		return errObj
 	}
 	if _, ok := faIconRune(name.Value); !ok {
-		return ErrorWithHint(currentCallToken, "неизвестная иконка: "+name.Value,
+		return ErrorWithHint(getCurrentCallToken(), "неизвестная иконка: "+name.Value,
 			"См. окно.список_иконок() — Font Awesome Solid")
 	}
 	bwin.mu.Lock()
@@ -568,7 +568,7 @@ func browserIconList(args ...Object) Object {
 
 func browserTitle(args ...Object) Object {
 	if bwin == nil || !bwin.open {
-		return ErrorWithHint(currentCallToken, "окно не создано", "")
+		return ErrorWithHint(getCurrentCallToken(), "окно не создано", "")
 	}
 	if len(args) != 1 {
 		return builtinErrorWrongArgCount("окно.заголовок", 1, len(args))
@@ -593,7 +593,7 @@ func browserKey(args ...Object) Object {
 	}
 	key, valid := normalizeBrowserKey(name.Value)
 	if !valid {
-		return ErrorWithHint(currentCallToken, "неизвестная клавиша: "+name.Value,
+		return ErrorWithHint(getCurrentCallToken(), "неизвестная клавиша: "+name.Value,
 			"Доступно: влево/вправо/вверх/вниз, WASD, пробел, escape, enter, r, p")
 	}
 	if bwin == nil {

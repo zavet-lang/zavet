@@ -13,7 +13,11 @@ import (
 // Output — куда печатает OpCallPrint (по умолчанию os.Stdout).
 var Output io.Writer = os.Stdout
 
-const maxCallFrames = 1024
+const maxCallFrames = 1000
+
+type vmUnset struct{}
+
+var unsetSentinel = vmUnset{}
 
 type callFrame struct {
 	chunk *Chunk
@@ -23,10 +27,11 @@ type callFrame struct {
 
 // Machine — стековая VM с кадрами вызовов.
 type Machine struct {
-	rootChunk *Chunk
-	stack     []any
-	globals   []any
-	frames    []callFrame
+	rootChunk    *Chunk
+	stack        []any
+	globals      []any
+	globalsConst []bool
+	frames       []callFrame
 }
 
 // New создаёт машину для корневого chunk.
@@ -35,11 +40,16 @@ func New(chunk *Chunk) *Machine {
 	if chunk != nil {
 		gLen = len(chunk.Names)
 	}
+	globals := make([]any, gLen)
+	for i := range globals {
+		globals[i] = unsetSentinel
+	}
 	return &Machine{
-		rootChunk: chunk,
-		stack:     make([]any, 0, 256),
-		globals:   make([]any, gLen),
-		frames:    make([]callFrame, 0, 32),
+		rootChunk:    chunk,
+		stack:        make([]any, 0, 256),
+		globals:      globals,
+		globalsConst: make([]bool, gLen),
+		frames:       make([]callFrame, 0, 32),
 	}
 }
 
@@ -85,7 +95,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = add(a, b)
+			r, err := add(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = r
 
 		case OpSub:
 			n := len(m.stack)
@@ -97,7 +111,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = sub(a, b)
+			r, err := sub(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = r
 
 		case OpMul:
 			n := len(m.stack)
@@ -109,11 +127,20 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = numOp(a, b, func(x, y float64) float64 { return x * y })
+			r, err := numOp(a, b, "*", func(x, y float64) float64 { return x * y })
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = r
 
 		case OpDiv:
 			b, a := m.pop(), m.pop()
-			if fb, ok := asFloat(b); ok && fb == 0 {
+			fa, oka := asFloat(a)
+			fb, okb := asFloat(b)
+			if !oka || !okb {
+				return fmt.Errorf("несоответствие типов для операции /")
+			}
+			if fb == 0 {
 				return fmt.Errorf("сын мой, не сотвори деления на ноль")
 			}
 			if ia, ok1 := a.(int64); ok1 {
@@ -122,13 +149,16 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			fa, _ := asFloat(a)
-			fb, _ := asFloat(b)
 			m.stack = append(m.stack, fa/fb)
 
 		case OpIntDiv:
 			b, a := m.pop(), m.pop()
-			if fb, ok := asFloat(b); ok && fb == 0 {
+			fa, oka := asFloat(a)
+			fb, okb := asFloat(b)
+			if !oka || !okb {
+				return fmt.Errorf("несоответствие типов для операции //")
+			}
+			if fb == 0 {
 				return fmt.Errorf("сын мой, не сотвори деления на ноль")
 			}
 			if ia, ok1 := a.(int64); ok1 {
@@ -137,13 +167,16 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			fa, _ := asFloat(a)
-			fb, _ := asFloat(b)
 			m.stack = append(m.stack, int64(fa/fb))
 
 		case OpMod:
 			b, a := m.pop(), m.pop()
-			if fb, ok := asFloat(b); ok && int64(fb) == 0 {
+			fa, oka := asFloat(a)
+			fb, okb := asFloat(b)
+			if !oka || !okb {
+				return fmt.Errorf("несоответствие типов для операции %%")
+			}
+			if int64(fb) == 0 {
 				return fmt.Errorf("сын мой, не сотвори деления на ноль")
 			}
 			if ia, ok1 := a.(int64); ok1 {
@@ -152,13 +185,20 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack = append(m.stack, numOp(a, b, func(x, y float64) float64 { return float64(int64(x) % int64(y)) }))
+			m.stack = append(m.stack, float64(int64(fa)%int64(fb)))
 
 		case OpNeg:
-			m.stack[len(m.stack)-1] = neg(m.stack[len(m.stack)-1])
+			r, err := neg(m.stack[len(m.stack)-1])
+			if err != nil {
+				return err
+			}
+			m.stack[len(m.stack)-1] = r
 
 		case OpNot:
 			m.stack[len(m.stack)-1] = !truthy(m.stack[len(m.stack)-1])
+
+		case OpToBool:
+			m.stack[len(m.stack)-1] = truthy(m.stack[len(m.stack)-1])
 
 		case OpEqual:
 			n := len(m.stack)
@@ -188,7 +228,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = cmp(a, b) > 0
+			c, err := cmp(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = c > 0
 
 		case OpGreaterEq:
 			n := len(m.stack)
@@ -200,7 +244,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = cmp(a, b) >= 0
+			c, err := cmp(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = c >= 0
 
 		case OpLess:
 			n := len(m.stack)
@@ -212,7 +260,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = cmp(a, b) < 0
+			c, err := cmp(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = c < 0
 
 		case OpLessEq:
 			n := len(m.stack)
@@ -224,7 +276,11 @@ func (m *Machine) Run() error {
 					continue
 				}
 			}
-			m.stack[n-2] = cmp(a, b) <= 0
+			c, err := cmp(a, b)
+			if err != nil {
+				return err
+			}
+			m.stack[n-2] = c <= 0
 
 		case OpJump:
 			frame.ip = ins.Operand
@@ -239,20 +295,31 @@ func (m *Machine) Run() error {
 				frame.ip = ins.Operand
 			}
 
-		case OpDefineGlobal, OpSetGlobal:
-			if ins.Operand >= len(m.globals) {
-				ng := make([]any, ins.Operand+1)
-				copy(ng, m.globals)
-				m.globals = ng
+		case OpDefineGlobal:
+			m.ensureGlobalSlot(ins.Operand)
+			m.globals[ins.Operand] = m.pop()
+			m.globalsConst[ins.Operand] = false
+
+		case OpDefineGlobalConst:
+			m.ensureGlobalSlot(ins.Operand)
+			m.globals[ins.Operand] = m.pop()
+			m.globalsConst[ins.Operand] = true
+
+		case OpSetGlobal:
+			m.ensureGlobalSlot(ins.Operand)
+			if m.globals[ins.Operand] == unsetSentinel {
+				return fmt.Errorf("имя «%s» не найдено в книге сотворённого", m.globalName(ins.Operand))
+			}
+			if m.globalsConst[ins.Operand] {
+				return fmt.Errorf("сын мой, «%s» сотворено словом «пусть» и не меняется", m.globalName(ins.Operand))
 			}
 			m.globals[ins.Operand] = m.pop()
 
 		case OpGetGlobal:
-			if ins.Operand < len(m.globals) {
-				m.stack = append(m.stack, m.globals[ins.Operand])
-			} else {
-				m.stack = append(m.stack, nil)
+			if ins.Operand >= len(m.globals) || m.globals[ins.Operand] == unsetSentinel {
+				return fmt.Errorf("имя «%s» не найдено в книге сотворённого", m.globalName(ins.Operand))
 			}
+			m.stack = append(m.stack, m.globals[ins.Operand])
 
 		case OpGetLocal:
 			m.stack = append(m.stack, m.stack[frame.bp+ins.Operand])
@@ -413,11 +480,43 @@ func (m *Machine) Run() error {
 				return fmt.Errorf("сын мой, «повтори … раз» просит целое число")
 			}
 
+		case OpError:
+			msg := "ошибка выполнения"
+			if ins.Operand >= 0 && ins.Operand < len(frame.chunk.Constants) {
+				if s, ok := frame.chunk.Constants[ins.Operand].(string); ok {
+					msg = s
+				}
+			}
+			return fmt.Errorf("%s", msg)
+
 		default:
 			return fmt.Errorf("неизвестный опкод %d", ins.Op)
 		}
 	}
 	return nil
+}
+
+func (m *Machine) ensureGlobalSlot(idx int) {
+	if idx < len(m.globals) {
+		return
+	}
+	oldLen := len(m.globals)
+	ng := make([]any, idx+1)
+	copy(ng, m.globals)
+	for i := oldLen; i < len(ng); i++ {
+		ng[i] = unsetSentinel
+	}
+	m.globals = ng
+	nc := make([]bool, idx+1)
+	copy(nc, m.globalsConst)
+	m.globalsConst = nc
+}
+
+func (m *Machine) globalName(idx int) string {
+	if m.rootChunk != nil && idx >= 0 && idx < len(m.rootChunk.Names) {
+		return m.rootChunk.Names[idx]
+	}
+	return "?"
 }
 
 func (m *Machine) pop() any {
@@ -545,66 +644,122 @@ func asFloat(v any) (float64, bool) {
 	}
 }
 
-func add(a, b any) any {
+func add(a, b any) (any, error) {
 	if sa, ok := a.(string); ok {
-		return sa + format(b)
+		return sa + format(b), nil
 	}
 	if sb, ok := b.(string); ok {
-		return format(a) + sb
+		return format(a) + sb, nil
 	}
-	return numOp(a, b, func(x, y float64) float64 { return x + y })
+	return numOp(a, b, "+", func(x, y float64) float64 { return x + y })
 }
 
-func sub(a, b any) any {
-	return numOp(a, b, func(x, y float64) float64 { return x - y })
+func sub(a, b any) (any, error) {
+	return numOp(a, b, "-", func(x, y float64) float64 { return x - y })
 }
 
-func neg(a any) any {
+func neg(a any) (any, error) {
 	if i, ok := a.(int64); ok {
-		return -i
+		return -i, nil
 	}
 	if f, ok := a.(float64); ok {
-		return -f
+		return -f, nil
 	}
-	return nil
+	return nil, fmt.Errorf("унарный минус применим лишь к числам")
 }
 
-func numOp(a, b any, fn func(float64, float64) float64) any {
+func numOp(a, b any, op string, fn func(float64, float64) float64) (any, error) {
 	fa, oka := asFloat(a)
 	fb, okb := asFloat(b)
 	if !oka || !okb {
-		return nil
+		return nil, fmt.Errorf("несоответствие типов для операции %s", op)
 	}
 	_, aInt := a.(int64)
 	_, bInt := b.(int64)
 	r := fn(fa, fb)
 	if aInt && bInt {
-		return int64(r)
+		return int64(r), nil
 	}
-	return r
+	return r, nil
 }
 
 func eq(a, b any) bool {
 	if a == nil && b == nil {
 		return true
 	}
+	// Совместимость с AST: ничего == ложь
+	if (a == nil && b == false) || (a == false && b == nil) {
+		return true
+	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a == b
+	// Числовое сравнение 1 == 1.0
+	if fa, oka := asFloat(a); oka {
+		if fb, okb := asFloat(b); okb {
+			return fa == fb
+		}
+		return false
+	}
+	switch av := a.(type) {
+	case string:
+		bv, ok := b.(string)
+		return ok && av == bv
+	case bool:
+		bv, ok := b.(bool)
+		return ok && av == bv
+	case []any:
+		bv, ok := b.([]any)
+		if !ok || len(av) != len(bv) {
+			return false
+		}
+		for i := range av {
+			if !eq(av[i], bv[i]) {
+				return false
+			}
+		}
+		return true
+	case *vmHash:
+		bv, ok := b.(*vmHash)
+		if !ok || len(av.pairs) != len(bv.pairs) {
+			return false
+		}
+		for k, ap := range av.pairs {
+			bp, exists := bv.pairs[k]
+			if !exists || !eq(ap.val, bp.val) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
-func cmp(a, b any) int {
-	fa, oka := asFloat(a)
-	fb, okb := asFloat(b)
-	if !oka || !okb {
-		return 0
+func cmp(a, b any) (int, error) {
+	if fa, oka := asFloat(a); oka {
+		if fb, okb := asFloat(b); okb {
+			if fa < fb {
+				return -1, nil
+			}
+			if fa > fb {
+				return 1, nil
+			}
+			return 0, nil
+		}
+		return 0, fmt.Errorf("нельзя сравнить число с другим видом")
 	}
-	if fa < fb {
-		return -1
+	if sa, oka := a.(string); oka {
+		if sb, okb := b.(string); okb {
+			if sa < sb {
+				return -1, nil
+			}
+			if sa > sb {
+				return 1, nil
+			}
+			return 0, nil
+		}
+		return 0, fmt.Errorf("нельзя сравнить строку с другим видом")
 	}
-	if fa > fb {
-		return 1
-	}
-	return 0
+	return 0, fmt.Errorf("сравнение не сотворимо для сих видов")
 }

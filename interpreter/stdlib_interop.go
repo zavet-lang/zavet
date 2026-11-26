@@ -48,7 +48,7 @@ func registerInteropModules() {
 			if errText == "" {
 				errText = err.Error()
 			}
-			return ErrorWithHint(currentCallToken, modName+": "+errText, "")
+			return ErrorWithHint(getCurrentCallToken(), modName+": "+errText, "")
 		}
 		outStr := strings.TrimSpace(stdout.String())
 		if outStr == "" {
@@ -72,7 +72,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "питон.выражение(код, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "питон.выражение(код, [данные])", "")
 			}
 			code, ok := args[0].(*String)
 			if !ok {
@@ -80,7 +80,7 @@ func registerInteropModules() {
 			}
 			bin := pythonBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
 			}
 			inJSON := "null"
 			if len(args) == 2 {
@@ -95,7 +95,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "питон.выполнить(код, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "питон.выполнить(код, [данные])", "")
 			}
 			code, ok := args[0].(*String)
 			if !ok {
@@ -103,7 +103,7 @@ func registerInteropModules() {
 			}
 			bin := pythonBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
 			}
 			inJSON := "null"
 			if len(args) == 2 {
@@ -118,7 +118,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "питон.файл(путь, [аргументы])", "")
+				return ErrorWithHint(getCurrentCallToken(), "питон.файл(путь, [аргументы])", "")
 			}
 			p, ok := args[0].(*String)
 			if !ok {
@@ -126,7 +126,7 @@ func registerInteropModules() {
 			}
 			bin := pythonBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Python не найден в PATH", "Установи Python 3 и добавь в PATH.")
 			}
 			cmdArgs := []string{p.Value}
 			if len(args) == 2 {
@@ -152,7 +152,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "js.выражение(код, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "js.выражение(код, [данные])", "")
 			}
 			code, ok := args[0].(*String)
 			if !ok {
@@ -160,7 +160,7 @@ func registerInteropModules() {
 			}
 			bin := nodeBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
 			}
 			inJSON := "null"
 			if len(args) == 2 {
@@ -175,7 +175,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "js.выполнить(код, [данные])", "")
+				return ErrorWithHint(getCurrentCallToken(), "js.выполнить(код, [данные])", "")
 			}
 			code, ok := args[0].(*String)
 			if !ok {
@@ -183,7 +183,7 @@ func registerInteropModules() {
 			}
 			bin := nodeBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
 			}
 			inJSON := "null"
 			if len(args) == 2 {
@@ -198,7 +198,7 @@ func registerInteropModules() {
 				return err
 			}
 			if len(args) < 1 || len(args) > 2 {
-				return ErrorWithHint(currentCallToken, "js.файл(путь, [аргументы])", "")
+				return ErrorWithHint(getCurrentCallToken(), "js.файл(путь, [аргументы])", "")
 			}
 			p, ok := args[0].(*String)
 			if !ok {
@@ -206,7 +206,7 @@ func registerInteropModules() {
 			}
 			bin := nodeBin()
 			if bin == "" {
-				return ErrorWithHint(currentCallToken, "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
+				return ErrorWithHint(getCurrentCallToken(), "Node.js не найден в PATH", "Установи Node.js и добавь в PATH.")
 			}
 			cmdArgs := []string{p.Value}
 			if len(args) == 2 {

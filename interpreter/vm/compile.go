@@ -20,12 +20,13 @@ type loopContext struct {
 }
 
 type compiler struct {
-	chunk    *Chunk
-	isFunc   bool
-	locals   map[string]int
-	numLocal int
-	loops    []*loopContext
-	globals  *Chunk // корневой chunk для таблицы имён глобальных
+	chunk           *Chunk
+	isFunc          bool
+	locals          map[string]int
+	immutableLocals map[string]bool
+	numLocal        int
+	loops           []*loopContext
+	globals         *Chunk // корневой chunk для таблицы имён глобальных
 }
 
 func newCompiler(globals *Chunk, isFunc bool) *compiler {
@@ -34,10 +35,11 @@ func newCompiler(globals *Chunk, isFunc bool) *compiler {
 		globals = c
 	}
 	return &compiler{
-		chunk:   c,
-		isFunc:  isFunc,
-		locals:  make(map[string]int),
-		globals: globals,
+		chunk:           c,
+		isFunc:          isFunc,
+		locals:          make(map[string]int),
+		immutableLocals: make(map[string]bool),
+		globals:         globals,
 	}
 }
 
@@ -108,9 +110,10 @@ func (cp *compiler) compileStmt(stmt ast.Statement) error {
 		}
 		slot, isLocal := cp.defineVar(s.Name.Value)
 		if isLocal {
+			cp.immutableLocals[s.Name.Value] = true
 			cp.chunk.emit(OpSetLocal, slot)
 		} else {
-			cp.chunk.emit(OpDefineGlobal, slot)
+			cp.chunk.emit(OpDefineGlobalConst, slot)
 		}
 		return nil
 
@@ -123,6 +126,7 @@ func (cp *compiler) compileStmt(stmt ast.Statement) error {
 		}
 		slot, isLocal := cp.defineVar(s.Name.Value)
 		if isLocal {
+			delete(cp.immutableLocals, s.Name.Value)
 			cp.chunk.emit(OpSetLocal, slot)
 		} else {
 			cp.chunk.emit(OpDefineGlobal, slot)
@@ -133,6 +137,11 @@ func (cp *compiler) compileStmt(stmt ast.Statement) error {
 		switch left := s.Left.(type) {
 		case *ast.Identifier:
 			slot, isLocal := cp.resolveVar(left.Value)
+			if isLocal && cp.immutableLocals[left.Value] {
+				msg := fmt.Sprintf("сын мой, «%s» сотворено словом «пусть» и не меняется", left.Value)
+				cp.chunk.emit(OpError, cp.chunk.addConstant(msg))
+				return nil
+			}
 			if s.Operator == "=" {
 				if err := cp.compileExpr(s.Value); err != nil {
 					return err
@@ -365,7 +374,7 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 		}
 		return nil
 	case *ast.InfixExpression:
-		// Короткое замыкание для «и» / «или»
+		// Короткое замыкание для «и» / «или» (результат — bool, как в AST)
 		if e.Operator == "и" || e.Operator == "&&" {
 			if err := cp.compileExpr(e.Left); err != nil {
 				return err
@@ -377,6 +386,7 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 				return err
 			}
 			cp.chunk.patch(jEnd, len(cp.chunk.Code))
+			cp.chunk.emit(OpToBool, 0)
 			return nil
 		}
 		if e.Operator == "или" || e.Operator == "||" {
@@ -390,6 +400,7 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 				return err
 			}
 			cp.chunk.patch(jEnd, len(cp.chunk.Code))
+			cp.chunk.emit(OpToBool, 0)
 			return nil
 		}
 		if err := cp.compileExpr(e.Left); err != nil {

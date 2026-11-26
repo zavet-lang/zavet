@@ -24,7 +24,7 @@ func init() {
 	builtins["объединение"] = &Builtin{
 		Fn: func(args ...Object) Object {
 			if len(args) != 2 || args[0].Type() != "ARRAY" || args[1].Type() != "ARRAY" {
-				return ErrorWithHint(currentCallToken, "объединение(a, b) потребно двух стад", "")
+				return ErrorWithHint(getCurrentCallToken(), "объединение(a, b) потребно двух стад", "")
 			}
 			a := args[0].(*Array)
 			b := args[1].(*Array)
@@ -50,7 +50,7 @@ func init() {
 	builtins["пересечение"] = &Builtin{
 		Fn: func(args ...Object) Object {
 			if len(args) != 2 || args[0].Type() != "ARRAY" || args[1].Type() != "ARRAY" {
-				return ErrorWithHint(currentCallToken, "пересечение(a, b) потребно двух стад", "")
+				return ErrorWithHint(getCurrentCallToken(), "пересечение(a, b) потребно двух стад", "")
 			}
 			a := args[0].(*Array)
 			b := args[1].(*Array)
@@ -73,7 +73,7 @@ func init() {
 	builtins["разность"] = &Builtin{
 		Fn: func(args ...Object) Object {
 			if len(args) != 2 || args[0].Type() != "ARRAY" || args[1].Type() != "ARRAY" {
-				return ErrorWithHint(currentCallToken, "разность(a, b) потребна двух стад", "")
+				return ErrorWithHint(getCurrentCallToken(), "разность(a, b) потребна двух стад", "")
 			}
 			a := args[0].(*Array)
 			b := args[1].(*Array)

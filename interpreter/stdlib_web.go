@@ -38,7 +38,7 @@ func registerWebFrameworkModule() {
 		// веб.текст(строка, [статус=200])
 		"текст": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "веб.текст(строка, [статус])", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.текст(строка, [статус])", "")
 			}
 			status := int64(200)
 			if len(args) >= 2 {
@@ -52,7 +52,7 @@ func registerWebFrameworkModule() {
 		// веб.html(html, [статус=200])
 		"html": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "веб.html(html, [статус])", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.html(html, [статус])", "")
 			}
 			status := int64(200)
 			if len(args) >= 2 {
@@ -66,7 +66,7 @@ func registerWebFrameworkModule() {
 		// веб.json(данные, [статус=200])
 		"json": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "веб.json(данные, [статус])", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.json(данные, [статус])", "")
 			}
 			status := int64(200)
 			if len(args) >= 2 {
@@ -80,7 +80,7 @@ func registerWebFrameworkModule() {
 		// веб.редирект(url, [статус=302])
 		"редирект": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "веб.редирект(url, [статус])", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.редирект(url, [статус])", "")
 			}
 			status := int64(302)
 			if len(args) >= 2 {
@@ -97,7 +97,7 @@ func registerWebFrameworkModule() {
 		// веб.ошибка(статус, сообщение)
 		"ошибка": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "веб.ошибка(статус, сообщение)", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.ошибка(статус, сообщение)", "")
 			}
 			status := int64(500)
 			if s, ok := args[0].(*Integer); ok {
@@ -112,7 +112,7 @@ func registerWebFrameworkModule() {
 		// веб.кука(ответ, имя, значение, [опции_словарь]) -> ответ
 		"кука": func(args ...Object) Object {
 			if len(args) < 3 {
-				return ErrorWithHint(currentCallToken, "веб.кука(ответ, имя, значение, [опции])", "")
+				return ErrorWithHint(getCurrentCallToken(), "веб.кука(ответ, имя, значение, [опции])", "")
 			}
 			resp, ok := args[0].(*Hash)
 			if !ok {
@@ -287,11 +287,11 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 		name := ruName
 		h.Set(&String{Value: name}, &Builtin{Fn: func(args ...Object) Object {
 			if len(args) != 2 {
-				return ErrorWithHint(currentCallToken, name+"(путь, обработчик)", "")
+				return ErrorWithHint(getCurrentCallToken(), name+"(путь, обработчик)", "")
 			}
 			p, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "путь должен быть строкой", "")
+				return ErrorWithHint(getCurrentCallToken(), "путь должен быть строкой", "")
 			}
 			addRoute(m, p.Value, args[1])
 			return h
@@ -300,12 +300,12 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 
 	h.Set(&String{Value: "маршрут"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 3 {
-			return ErrorWithHint(currentCallToken, "маршрут(метод, путь, обработчик)", "")
+			return ErrorWithHint(getCurrentCallToken(), "маршрут(метод, путь, обработчик)", "")
 		}
 		m, ok1 := args[0].(*String)
 		p, ok2 := args[1].(*String)
 		if !ok1 || !ok2 {
-			return ErrorWithHint(currentCallToken, "метод и путь должны быть строками", "")
+			return ErrorWithHint(getCurrentCallToken(), "метод и путь должны быть строками", "")
 		}
 		addRoute(m.Value, p.Value, args[2])
 		return h
@@ -313,18 +313,18 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 
 	h.Set(&String{Value: "группа"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "группа(префикс)", "")
+			return ErrorWithHint(getCurrentCallToken(), "группа(префикс)", "")
 		}
 		p, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "префикс должен быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "префикс должен быть строкой", "")
 		}
 		return app.toObject(joinWebPrefix(prefix, p.Value), localMW...)
 	}})
 
 	h.Set(&String{Value: "использовать"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "использовать(middleware)", "")
+			return ErrorWithHint(getCurrentCallToken(), "использовать(middleware)", "")
 		}
 		if prefix == "" {
 			app.middlewares = append(app.middlewares, args[0])
@@ -336,7 +336,7 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 
 	h.Set(&String{Value: "при_ошибке"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "при_ошибке(обработчик)", "")
+			return ErrorWithHint(getCurrentCallToken(), "при_ошибке(обработчик)", "")
 		}
 		app.errorFn = args[0]
 		return h
@@ -344,12 +344,12 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 
 	h.Set(&String{Value: "статика"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 2 {
-			return ErrorWithHint(currentCallToken, "статика(url_префикс, папка)", "")
+			return ErrorWithHint(getCurrentCallToken(), "статика(url_префикс, папка)", "")
 		}
 		u, ok1 := args[0].(*String)
 		dir, ok2 := args[1].(*String)
 		if !ok1 || !ok2 {
-			return ErrorWithHint(currentCallToken, "оба приношения должны быть строками", "")
+			return ErrorWithHint(getCurrentCallToken(), "оба приношения должны быть строками", "")
 		}
 		app.statics[u.Value] = dir.Value
 		return h
@@ -358,7 +358,7 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 	// обработать(метод, путь, [тело], [заголовки]) -> словарь ответа (для тестов без сети)
 	h.Set(&String{Value: "обработать"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) < 2 {
-			return ErrorWithHint(currentCallToken, "обработать(метод, путь, [тело], [заголовки])", "")
+			return ErrorWithHint(getCurrentCallToken(), "обработать(метод, путь, [тело], [заголовки])", "")
 		}
 		method := strings.ToUpper(args[0].Inspect())
 		rawURL := args[1].Inspect()
@@ -382,11 +382,11 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 			return err
 		}
 		if len(args) < 1 {
-			return ErrorWithHint(currentCallToken, "запустить(порт)", "")
+			return ErrorWithHint(getCurrentCallToken(), "запустить(порт)", "")
 		}
 		portObj, ok := args[0].(*Integer)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "порт должен быть целым числом", "")
+			return ErrorWithHint(getCurrentCallToken(), "порт должен быть целым числом", "")
 		}
 		mux := http.NewServeMux()
 		for uPrefix, dir := range app.statics {
@@ -410,7 +410,7 @@ func (app *webApp) toObject(prefix string, groupMW ...Object) *Hash {
 		addr := fmt.Sprintf(":%d", portObj.Value)
 		fmt.Fprintf(OutputWriter, "Веб-сервер Завета запущен на http://localhost%s\n", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			return ErrorWithHint(currentCallToken, "грех сервера: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех сервера: "+err.Error(), "")
 		}
 		return NULL
 	}})

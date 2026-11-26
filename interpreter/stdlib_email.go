@@ -39,7 +39,7 @@ func registerEmailModule() {
 		// почта.собрать(от, кому, тема, тело, [html]) -> строка RFC 5322
 		"собрать": func(args ...Object) Object {
 			if len(args) < 4 || len(args) > 5 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"почта.собрать(от, кому, тема, тело, [html])",
 					"Употребляй: почта.собрать(\"a@b.ru\", \"c@d.ru\", \"Тема\", \"Текст\")")
 			}
@@ -48,7 +48,7 @@ func registerEmailModule() {
 			subj, ok3 := args[2].(*String)
 			body, ok4 := args[3].(*String)
 			if !ok1 || !ok2 || !ok3 || !ok4 {
-				return ErrorWithHint(currentCallToken, "все приношения должны быть строками", "")
+				return ErrorWithHint(getCurrentCallToken(), "все приношения должны быть строками", "")
 			}
 			isHTML := false
 			if len(args) == 5 {
@@ -61,7 +61,7 @@ func registerEmailModule() {
 		// Ключи: хост, порт (по умолчанию 587), пользователь, пароль, от, кому, тема, тело, html (опц.), tls (опц.)
 		"отправить": func(args ...Object) Object {
 			if len(args) != 1 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"почта.отправить(настройки)",
 					"Принеси словарь с ключами: хост, порт, от, кому, тема, тело (и опц. пользователь, пароль, html, tls).")
 			}
@@ -78,7 +78,7 @@ func registerEmailModule() {
 			}
 			host := getStr("хост")
 			if host == "" {
-				return ErrorWithHint(currentCallToken, "в настройках почты не указан «хост»", "")
+				return ErrorWithHint(getCurrentCallToken(), "в настройках почты не указан «хост»", "")
 			}
 			if err := CheckHost("smtp://" + host); err != nil {
 				return err
@@ -98,7 +98,7 @@ func registerEmailModule() {
 			}
 			toStr := getStr("кому")
 			if from == "" || toStr == "" {
-				return ErrorWithHint(currentCallToken, "в настройках почты потребны поля «от» и «кому»", "")
+				return ErrorWithHint(getCurrentCallToken(), "в настройках почты потребны поля «от» и «кому»", "")
 			}
 			subj := getStr("тема")
 			body := getStr("тело")
@@ -129,43 +129,43 @@ func registerEmailModule() {
 			if useImplicitTLS {
 				conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: host})
 				if err != nil {
-					return ErrorWithHint(currentCallToken, "не смог подключиться по TLS к SMTP: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "не смог подключиться по TLS к SMTP: "+err.Error(), "")
 				}
 				client, err := smtp.NewClient(conn, host)
 				if err != nil {
 					conn.Close()
-					return ErrorWithHint(currentCallToken, "грех SMTP: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "грех SMTP: "+err.Error(), "")
 				}
 				defer client.Close()
 				if auth != nil {
 					if err := client.Auth(auth); err != nil {
-						return ErrorWithHint(currentCallToken, "грех аутентификации SMTP: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех аутентификации SMTP: "+err.Error(), "")
 					}
 				}
 				if err := client.Mail(from); err != nil {
-					return ErrorWithHint(currentCallToken, "грех SMTP MAIL: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "грех SMTP MAIL: "+err.Error(), "")
 				}
 				for _, rcpt := range recipients {
 					if err := client.Rcpt(rcpt); err != nil {
-						return ErrorWithHint(currentCallToken, "грех SMTP RCPT: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех SMTP RCPT: "+err.Error(), "")
 					}
 				}
 				w, err := client.Data()
 				if err != nil {
-					return ErrorWithHint(currentCallToken, "грех SMTP DATA: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "грех SMTP DATA: "+err.Error(), "")
 				}
 				if _, err := w.Write(msg); err != nil {
-					return ErrorWithHint(currentCallToken, "не смог отправить письмо: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "не смог отправить письмо: "+err.Error(), "")
 				}
 				if err := w.Close(); err != nil {
-					return ErrorWithHint(currentCallToken, "не смог завершить отправку письма: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "не смог завершить отправку письма: "+err.Error(), "")
 				}
 				_ = client.Quit()
 				return TRUE
 			}
 
 			if err := smtp.SendMail(addr, auth, from, recipients, msg); err != nil {
-				return ErrorWithHint(currentCallToken, "не смог отправить письмо: "+err.Error(), "Вникни в хост, порт и учётные данные SMTP.")
+				return ErrorWithHint(getCurrentCallToken(), "не смог отправить письмо: "+err.Error(), "Вникни в хост, порт и учётные данные SMTP.")
 			}
 			return TRUE
 		},

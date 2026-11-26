@@ -47,7 +47,7 @@ func registerFilesModule() {
 			}
 			data, e := os.ReadFile(path)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть файл: "+e.Error(), "Вникни в путь и права доступа.")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть файл: "+e.Error(), "Вникни в путь и права доступа.")
 			}
 			return &String{Value: string(data)}
 		},
@@ -67,7 +67,7 @@ func registerFilesModule() {
 				return err
 			}
 			if e := os.WriteFile(path, []byte(content), 0644); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог записать файл: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог записать файл: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -82,11 +82,11 @@ func registerFilesModule() {
 			}
 			f, e := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог открыть файл: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог открыть файл: "+e.Error(), "")
 			}
 			defer f.Close()
 			if _, e := f.WriteString(content); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог записать: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог записать: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -113,7 +113,7 @@ func registerFilesModule() {
 				return err
 			}
 			if e := os.Remove(path); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог удалить: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог удалить: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -127,7 +127,7 @@ func registerFilesModule() {
 				return err
 			}
 			if e := os.Rename(oldP, newP); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог переименовать: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог переименовать: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -138,7 +138,7 @@ func registerFilesModule() {
 			}
 			entries, e := os.ReadDir(path)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть папку: "+e.Error(), "")
 			}
 			result := make([]Object, 0, len(entries))
 			for _, en := range entries {
@@ -152,7 +152,7 @@ func registerFilesModule() {
 				return err
 			}
 			if e := os.MkdirAll(path, 0755); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог создать папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог создать папку: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -162,7 +162,7 @@ func registerFilesModule() {
 				return err
 			}
 			if e := os.RemoveAll(path); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог удалить папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог удалить папку: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -173,7 +173,7 @@ func registerFilesModule() {
 			}
 			info, e := os.Stat(path)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог узнать размер: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог узнать размер: "+e.Error(), "")
 			}
 			return &Integer{Value: info.Size()}
 		},
@@ -257,7 +257,7 @@ func registerPathModule() {
 			}
 			abs, e := filepath.Abs(s)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог вычислить путь: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог вычислить путь: "+e.Error(), "")
 			}
 			return &String{Value: abs}
 		},
@@ -272,7 +272,7 @@ func registerPathModule() {
 			}
 			rel, e := filepath.Rel(base, target)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог вычислить относительный путь: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог вычислить относительный путь: "+e.Error(), "")
 			}
 			return &String{Value: rel}
 		},
@@ -312,7 +312,7 @@ func registerOsModule() {
 				return err
 			}
 			if e := os.Setenv(name, val); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог установить переменную: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог установить переменную: "+e.Error(), "")
 			}
 			return NULL
 		},
@@ -339,7 +339,7 @@ func registerOsModule() {
 		"текущая_директория": func(args ...Object) Object {
 			d, e := os.Getwd()
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог узнать папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог узнать папку: "+e.Error(), "")
 			}
 			return &String{Value: d}
 		},
@@ -349,14 +349,14 @@ func registerOsModule() {
 				return err
 			}
 			if e := os.Chdir(path); e != nil {
-				return ErrorWithHint(currentCallToken, "не смог сменить папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог сменить папку: "+e.Error(), "")
 			}
 			return NULL
 		},
 		"домашняя_директория": func(args ...Object) Object {
 			d, e := os.UserHomeDir()
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог узнать домашнюю папку: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог узнать домашнюю папку: "+e.Error(), "")
 			}
 			return &String{Value: d}
 		},
@@ -366,7 +366,7 @@ func registerOsModule() {
 		"запустить": func(args ...Object) Object {
 			// ос.запустить(команда, ...аргументы) → строка с stdout
 			// Запрещено в WASM, но в нативе работает
-			return ErrorWithHint(currentCallToken,
+			return ErrorWithHint(getCurrentCallToken(),
 				"ос.запустить пока не сотворено",
 				"Для работы с данными употребляй читать_файл и записать_файл.")
 		},
@@ -434,7 +434,7 @@ func registerCryptoModule() {
 			}
 			data, e := base64.StdEncoding.DecodeString(s)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог декодировать base64: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог декодировать base64: "+e.Error(), "")
 			}
 			return &String{Value: string(data)}
 		},
@@ -452,14 +452,14 @@ func registerCryptoModule() {
 			}
 			data, e := hex.DecodeString(s)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "не смог декодировать hex: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог декодировать hex: "+e.Error(), "")
 			}
 			return &String{Value: string(data)}
 		},
 		// === HMAC ===
 		"hmac_sha256": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "hmac_sha256(сообщение, ключ)", "")
+				return ErrorWithHint(getCurrentCallToken(), "hmac_sha256(сообщение, ключ)", "")
 			}
 			msg, e1 := getString(args, 0, "крипто.hmac_sha256")
 			if e1 != nil {
@@ -475,7 +475,7 @@ func registerCryptoModule() {
 		},
 		"hmac_sha1": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "hmac_sha1(сообщение, ключ)", "")
+				return ErrorWithHint(getCurrentCallToken(), "hmac_sha1(сообщение, ключ)", "")
 			}
 			msg, e1 := getString(args, 0, "крипто.hmac_sha1")
 			if e1 != nil {
@@ -492,7 +492,7 @@ func registerCryptoModule() {
 		// === AES ===
 		"aes_зашифровать": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "aes_зашифровать(текст, ключ_16_24_32_байт)", "")
+				return ErrorWithHint(getCurrentCallToken(), "aes_зашифровать(текст, ключ_16_24_32_байт)", "")
 			}
 			plaintext, e1 := getString(args, 0, "крипто.aes_зашифровать")
 			if e1 != nil {
@@ -504,7 +504,7 @@ func registerCryptoModule() {
 			}
 			block, e := aes.NewCipher([]byte(key))
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "ключ AES должен быть 16, 24 или 32 байта: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "ключ AES должен быть 16, 24 или 32 байта: "+e.Error(), "")
 			}
 			plainBytes := []byte(plaintext)
 			// PKCS7 padding
@@ -521,7 +521,7 @@ func registerCryptoModule() {
 		},
 		"aes_расшифровать": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "aes_расшифровать(шифротекст_base64, ключ)", "")
+				return ErrorWithHint(getCurrentCallToken(), "aes_расшифровать(шифротекст_base64, ключ)", "")
 			}
 			ciphertextB64, e1 := getString(args, 0, "крипто.aes_расшифровать")
 			if e1 != nil {
@@ -533,37 +533,37 @@ func registerCryptoModule() {
 			}
 			ciphertext, e := base64.StdEncoding.DecodeString(ciphertextB64)
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "неверный base64: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "неверный base64: "+e.Error(), "")
 			}
 			block, e := aes.NewCipher([]byte(key))
 			if e != nil {
-				return ErrorWithHint(currentCallToken, "ключ AES: "+e.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "ключ AES: "+e.Error(), "")
 			}
 			if len(ciphertext) < aes.BlockSize {
-				return ErrorWithHint(currentCallToken, "шифротекст слишком короток", "")
+				return ErrorWithHint(getCurrentCallToken(), "шифротекст слишком короток", "")
 			}
 			iv := ciphertext[:aes.BlockSize]
 			ciphertext = ciphertext[aes.BlockSize:]
 			if len(ciphertext)%aes.BlockSize != 0 {
-				return ErrorWithHint(currentCallToken, "неверная длина шифротекста", "")
+				return ErrorWithHint(getCurrentCallToken(), "неверная длина шифротекста", "")
 			}
 			mode := cipher.NewCBCDecrypter(block, iv)
 			mode.CryptBlocks(ciphertext, ciphertext)
 			// Remove PKCS7 padding
 			padLen := int(ciphertext[len(ciphertext)-1])
 			if padLen > aes.BlockSize || padLen == 0 {
-				return ErrorWithHint(currentCallToken, "грех расшифровки (неверный ключ?)", "")
+				return ErrorWithHint(getCurrentCallToken(), "грех расшифровки (неверный ключ?)", "")
 			}
 			return &String{Value: string(ciphertext[:len(ciphertext)-padLen])}
 		},
 		// === JWT ===
 		"jwt_создать": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "jwt_создать(данные_hash, секрет)", "")
+				return ErrorWithHint(getCurrentCallToken(), "jwt_создать(данные_hash, секрет)", "")
 			}
 			payload, ok := args[0].(*Hash)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "первое приношение — словарь с данными", "")
+				return ErrorWithHint(getCurrentCallToken(), "первое приношение — словарь с данными", "")
 			}
 			secret, e2 := getString(args, 1, "крипто.jwt_создать")
 			if e2 != nil {
@@ -583,7 +583,7 @@ func registerCryptoModule() {
 		},
 		"jwt_проверить": func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, "jwt_проверить(токен, секрет)", "")
+				return ErrorWithHint(getCurrentCallToken(), "jwt_проверить(токен, секрет)", "")
 			}
 			token, e1 := getString(args, 0, "крипто.jwt_проверить")
 			if e1 != nil {
@@ -643,7 +643,7 @@ func extendTimeModule() {
 		}
 		t, e := time.Parse(format, s)
 		if e != nil {
-			return ErrorWithHint(currentCallToken, "не смог разобрать время: "+e.Error(),
+			return ErrorWithHint(getCurrentCallToken(), "не смог разобрать время: "+e.Error(),
 				"Формат должен совпасть со строкой. Пример формата: 2006-01-02 15:04:05")
 		}
 		return &Integer{Value: t.UnixMilli()}

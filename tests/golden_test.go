@@ -2,6 +2,8 @@ package tests
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -353,4 +355,131 @@ func TestCoreQualityImprovements(t *testing.T) {
 			t.Fatalf("ложное срабатывание type-mismatch: %s", iss.String())
 		}
 	}
+}
+
+// TestReviewRegressionFixes проверяет все исправления по итогам глубокого ревью:
+// песочницу (SQLite ATTACH, HTTP 302 CheckRedirect), лексический скоуп в рекурсии,
+// рантайм-проверку типов при переприсваивании, динамические переменные в линтере,
+// форматер на одинарных кавычках и \{/\}, и вложенные строки в интерполяции.
+func TestReviewRegressionFixes(t *testing.T) {
+	evalExpectError := func(code string) {
+		t.Helper()
+		prev := interpreter.OutputWriter
+		interpreter.OutputWriter = &bytes.Buffer{}
+		defer func() { interpreter.OutputWriter = prev }()
+		l := lexer.New(code)
+		p := parser.New(l)
+		prog := p.ParseProgram()
+		if len(p.Errors()) > 0 {
+			return
+		}
+		res := interpreter.Eval(prog, interpreter.NewEnvironment())
+		if res == nil || res.Type() != "ERROR" {
+			t.Fatalf("ожидалась ошибка для:\n%s\nполучено: %v", code, res)
+		}
+	}
+
+	// 1. Песочница: SQLite ATTACH DATABASE и file: URI запрещены
+	t.Run("safe_sqlite_attach_and_uri", func(t *testing.T) {
+		prevMode, prevRoot, prevHosts := interpreter.SafeMode, interpreter.SafeRoot, interpreter.SafeHosts
+		interpreter.SafeMode = true
+		interpreter.SafeRoot = t.TempDir()
+		interpreter.SafeHosts = nil
+		defer func() {
+			interpreter.SafeMode, interpreter.SafeRoot, interpreter.SafeHosts = prevMode, prevRoot, prevHosts
+		}()
+
+		evalExpectError(`
+пусть д = бд.открыть(":memory:")
+д.выполнить("ATTACH DATABASE 'outside.db' AS ext")
+`)
+		evalExpectError(`бд.открыть("file:outside.db?mode=rwc")`)
+	})
+
+	// 2. Песочница: HTTP 302 редирект на неразрешённый хост блокируется CheckRedirect
+	t.Run("safe_http_redirect", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "http://blocked.invalid/secret", http.StatusFound)
+		}))
+		defer srv.Close()
+
+		prevMode, prevRoot, prevHosts := interpreter.SafeMode, interpreter.SafeRoot, interpreter.SafeHosts
+		interpreter.SafeMode = true
+		interpreter.SafeRoot = t.TempDir()
+		interpreter.SafeHosts = []string{"127.0.0.1"}
+		defer func() {
+			interpreter.SafeMode, interpreter.SafeRoot, interpreter.SafeHosts = prevMode, prevRoot, prevHosts
+		}()
+
+		evalExpectError(`http.получить("` + srv.URL + `")`)
+	})
+
+	// 3. Лексический скоуп в рекурсии: локальная переменная не утекает во вложенный вызов
+	t.Run("lexical_scope_recursion", func(t *testing.T) {
+		evalExpectError(`
+слово ф(n)
+    если n == 1
+        пусть секрет = 42
+        аминь ф(2)
+    конец
+    аминь секрет
+конец
+ф(1)
+`)
+	})
+
+	// 4. Рантайм-проверка типа при переприсваивании измени x: Тип = ...
+	t.Run("runtime_var_type_reassign", func(t *testing.T) {
+		evalExpectError(`
+измени x: целое = 1
+x = "строка"
+`)
+	})
+
+	// 5. Линтер не даёт ложных type-mismatch для динамического измени без аннотации
+	t.Run("linter_dynamic_var", func(t *testing.T) {
+		src := "измени x = ничего\nx = \"привет\"\nвозгласи(x)\n"
+		for _, iss := range linter.Lint(src, "dyn.молитва") {
+			if iss.Code == "type-mismatch" {
+				t.Fatalf("ложное срабатывание на динамической переменной: %s", iss.String())
+			}
+		}
+	})
+
+	// 6. Форматер сохраняет исполнимость 24_веб_сайт.молитва и не выводит сырые 0x01/0x02
+	t.Run("formatter_strings_and_web_example", func(t *testing.T) {
+		raw, err := os.ReadFile("../examples/24_веб_сайт.молитва")
+		if err != nil {
+			t.Fatalf("read 24_веб_сайт: %v", err)
+		}
+		formatted, err := formatter.Format(string(raw))
+		if err != nil {
+			t.Fatalf("format 24_веб_сайт: %v", err)
+		}
+		out := runProgram(t, formatted, "24_formatted.молитва")
+		if strings.Contains(out, "✗") {
+			t.Fatalf("после форматирования 24_веб_сайт провалил встроенный тест:\n%s", out)
+		}
+
+		escSrc := "пусть x = 1\nвозгласи(\"\\{ok\\} {x}\")\n"
+		escFmt, err := formatter.Format(escSrc)
+		if err != nil {
+			t.Fatalf("format escaped braces: %v", err)
+		}
+		if strings.ContainsRune(escFmt, '\x01') || strings.ContainsRune(escFmt, '\x02') {
+			t.Fatalf("форматер записал сырые управляющие байты 0x01/0x02: %q", escFmt)
+		}
+		if got := strings.TrimSpace(runProgram(t, escFmt, "esc.молитва")); got != "{ok} 1" {
+			t.Fatalf("неожиданный вывод после форматирования \\{\\}: %q", got)
+		}
+	})
+
+	// 7. Интерполяция с '}' внутри вложенного строкового литерала и многострочные """..."""
+	t.Run("interpolation_nested_brace_and_multiline", func(t *testing.T) {
+		src := "пусть d = {\"}\": 7}\nвозгласи(\"val={d['}']}\")\nпусть шаб = \"\"\"{{имя}} {css}\"\"\"\nвозгласи(шаб)\n"
+		got := strings.TrimSpace(runProgram(t, src, "nested.молитва"))
+		if got != "val=7\n{{имя}} {css}" {
+			t.Fatalf("неожиданный вывод: %q", got)
+		}
+	})
 }

@@ -6,9 +6,6 @@ import (
 	"zavet/lexer"
 )
 
-// Глобальный контекст для передачи токена в builtin функции
-var currentCallToken lexer.Token
-
 func init() {
 	ApplyFunctionCallback = applyFunctionFromBuiltin
 }
@@ -68,6 +65,7 @@ func Eval(node ast.Node, env *Environment) Object {
 			}
 		}
 		env.Set(node.Name.Value, val)
+		env.SetType(node.Name.Value, node.TypeName)
 		return val
 
 	case *ast.AssignmentStatement:
@@ -136,6 +134,11 @@ func Eval(node ast.Node, env *Environment) Object {
 			// Простое присваивание: имя = значение
 			if env.IsImmutable(left.Value) {
 				return ErrorCannotReassignConst(node.Token, left.Value)
+			}
+			if typeName := env.GetType(left.Value); typeName != "" {
+				if err := checkTypeAnnotation(node.Token, left.Value, typeName, val); err != nil {
+					return err
+				}
 			}
 			_, ok := env.Update(left.Value, val)
 			if !ok {

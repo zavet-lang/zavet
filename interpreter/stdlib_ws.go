@@ -23,17 +23,17 @@ func registerWebSocketModule() {
 	fns := map[string]func(args ...Object) Object{
 		"подключить": func(args ...Object) Object {
 			if len(args) < 1 {
-				return ErrorWithHint(currentCallToken, "подключить потребен URL", "вс.подключить(\"wss://...\")")
+				return ErrorWithHint(getCurrentCallToken(), "подключить потребен URL", "вс.подключить(\"wss://...\")")
 			}
 			urlStr, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "URL должен быть строкой", "")
+				return ErrorWithHint(getCurrentCallToken(), "URL должен быть строкой", "")
 			}
 
 			// Валидация URL
 			u, err := url.Parse(urlStr.Value)
 			if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") {
-				return ErrorWithHint(currentCallToken, "неверный адрес WebSocket (нужен ws:// или wss://)", "")
+				return ErrorWithHint(getCurrentCallToken(), "неверный адрес WebSocket (нужен ws:// или wss://)", "")
 			}
 
 			if herr := CheckHost(urlStr.Value); herr != nil {
@@ -42,7 +42,7 @@ func registerWebSocketModule() {
 
 			conn, _, err := websocket.DefaultDialer.Dial(urlStr.Value, nil)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог подключиться: "+err.Error(), "Вникни в адрес и доступен ли сервер.")
+				return ErrorWithHint(getCurrentCallToken(), "не смог подключиться: "+err.Error(), "Вникни в адрес и доступен ли сервер.")
 			}
 
 			return newWSConnection(conn)
@@ -59,18 +59,18 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 	// отправить(текст) — отправить текстовое сообщение
 	h.Set(&String{Value: "отправить"}, &Builtin{Fn: func(args ...Object) Object {
 		if closed {
-			return ErrorWithHint(currentCallToken, "соединение закрыто", "")
+			return ErrorWithHint(getCurrentCallToken(), "соединение закрыто", "")
 		}
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "отправить(текст)", "")
+			return ErrorWithHint(getCurrentCallToken(), "отправить(текст)", "")
 		}
 		msg, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "приношение должно быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой", "")
 		}
 		err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Value))
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог отправить: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог отправить: "+err.Error(), "")
 		}
 		return NULL
 	}})
@@ -78,14 +78,14 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 	// отправить_json(объект) — сериализует и отправляет
 	h.Set(&String{Value: "отправить_json"}, &Builtin{Fn: func(args ...Object) Object {
 		if closed {
-			return ErrorWithHint(currentCallToken, "соединение закрыто", "")
+			return ErrorWithHint(getCurrentCallToken(), "соединение закрыто", "")
 		}
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "отправить_json(объект)", "")
+			return ErrorWithHint(getCurrentCallToken(), "отправить_json(объект)", "")
 		}
 		err := conn.WriteJSON(args[0].Inspect())
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог отправить: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог отправить: "+err.Error(), "")
 		}
 		return NULL
 	}})
@@ -101,7 +101,7 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 				closed = true
 				return NULL
 			}
-			return ErrorWithHint(currentCallToken, "не смог прочесть: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог прочесть: "+err.Error(), "")
 		}
 		return &String{Value: string(message)}
 	}})
@@ -109,15 +109,15 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 	// слушать(количество, обработчик) — получить N сообщений, вызвать функцию для каждого
 	h.Set(&String{Value: "слушать"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) < 2 {
-			return ErrorWithHint(currentCallToken, "слушать(количество, функция)", "слушать(10, функция(сообщение) ... конец)")
+			return ErrorWithHint(getCurrentCallToken(), "слушать(количество, функция)", "слушать(10, функция(сообщение) ... конец)")
 		}
 		count, ok := args[0].(*Integer)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "первое приношение — число сообщений", "")
+			return ErrorWithHint(getCurrentCallToken(), "первое приношение — число сообщений", "")
 		}
 		fn := args[1]
 		if fn.Type() != "FUNCTION" && fn.Type() != "BUILTIN" {
-			return ErrorWithHint(currentCallToken, "второе приношение — функция-обработчик", "")
+			return ErrorWithHint(getCurrentCallToken(), "второе приношение — функция-обработчик", "")
 		}
 
 		for i := int64(0); i < count.Value; i++ {
@@ -130,7 +130,7 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 					closed = true
 					break
 				}
-				return ErrorWithHint(currentCallToken, "не смог прочесть: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть: "+err.Error(), "")
 			}
 			result := ApplyFunctionCallback(fn, []Object{&String{Value: string(message)}})
 			if isError(result) {
@@ -147,7 +147,7 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 	// таймаут(секунды) — установить таймаут чтения
 	h.Set(&String{Value: "таймаут"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "таймаут(секунды)", "")
+			return ErrorWithHint(getCurrentCallToken(), "таймаут(секунды)", "")
 		}
 		var seconds float64
 		switch v := args[0].(type) {
@@ -156,7 +156,7 @@ func newWSConnection(conn *websocket.Conn) *Hash {
 		case *Float:
 			seconds = v.Value
 		default:
-			return ErrorWithHint(currentCallToken, "приношение должно быть числом", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть числом", "")
 		}
 		conn.SetReadDeadline(time.Now().Add(time.Duration(seconds * float64(time.Second))))
 		return NULL
@@ -207,15 +207,15 @@ func wsServerFunc(args ...Object) Object {
 		return err
 	}
 	if len(args) < 2 {
-		return ErrorWithHint(currentCallToken, "сервер(порт, обработчик)", "вс.сервер(8080, функция(клиент) ... конец)")
+		return ErrorWithHint(getCurrentCallToken(), "сервер(порт, обработчик)", "вс.сервер(8080, функция(клиент) ... конец)")
 	}
 	portObj, ok := args[0].(*Integer)
 	if !ok {
-		return ErrorWithHint(currentCallToken, "порт должен быть целым числом", "")
+		return ErrorWithHint(getCurrentCallToken(), "порт должен быть целым числом", "")
 	}
 	handler := args[1]
 	if handler.Type() != "FUNCTION" && handler.Type() != "BUILTIN" {
-		return ErrorWithHint(currentCallToken, "второе приношение — функция-обработчик", "")
+		return ErrorWithHint(getCurrentCallToken(), "второе приношение — функция-обработчик", "")
 	}
 
 	mux := http.NewServeMux()
@@ -234,7 +234,7 @@ func wsServerFunc(args ...Object) Object {
 	fmt.Printf("WebSocket-сервер запущен на ws://localhost%s\n", addr)
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "грех сервера: "+err.Error(), "")
+		return ErrorWithHint(getCurrentCallToken(), "грех сервера: "+err.Error(), "")
 	}
 	return NULL
 }

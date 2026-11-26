@@ -23,7 +23,7 @@ func flattenNumericArgs(args []Object, fnName string) (nums []float64, allInts b
 				}
 				v := toFloat(el)
 				if v == nil {
-					return nil, false, ErrorWithHint(currentCallToken,
+					return nil, false, ErrorWithHint(getCurrentCallToken(),
 						fmt.Sprintf("слово «%s»: элемент %d стада не число", fnName, j),
 						"Все элементы должны быть целыми (INTEGER) или дробными (FLOAT).")
 				}
@@ -36,7 +36,7 @@ func flattenNumericArgs(args []Object, fnName string) (nums []float64, allInts b
 		}
 		v := toFloat(arg)
 		if v == nil {
-			return nil, false, ErrorWithHint(currentCallToken,
+			return nil, false, ErrorWithHint(getCurrentCallToken(),
 				fmt.Sprintf("слово «%s»: приношение %d не число", fnName, i+1),
 				"Приноси числа или стада чисел.")
 		}
@@ -118,7 +118,7 @@ func init() {
 					return &Float{Value: fnum}
 				}
 				return ErrorWithHint(
-					currentCallToken,
+					getCurrentCallToken(),
 					fmt.Sprintf("не смог обратить '%s' в число", str),
 					"Вникни, хранит ли строка верное число (например: \"123\" или \"45.67\").",
 				)
@@ -133,7 +133,7 @@ func init() {
 				return err
 			}
 			if len(nums) == 0 {
-				return ErrorWithHint(currentCallToken, "слово «мин» потребно хотя бы одно число", "Употребляй: мин(1, 2, 3) или мин([1, 2, 3])")
+				return ErrorWithHint(getCurrentCallToken(), "слово «мин» потребно хотя бы одно число", "Употребляй: мин(1, 2, 3) или мин([1, 2, 3])")
 			}
 			result := nums[0]
 			for _, v := range nums[1:] {
@@ -154,7 +154,7 @@ func init() {
 				return err
 			}
 			if len(nums) == 0 {
-				return ErrorWithHint(currentCallToken, "слово «макс» потребно хотя бы одно число", "Употребляй: макс(1, 2, 3) или макс([1, 2, 3])")
+				return ErrorWithHint(getCurrentCallToken(), "слово «макс» потребно хотя бы одно число", "Употребляй: макс(1, 2, 3) или макс([1, 2, 3])")
 			}
 			result := nums[0]
 			for _, v := range nums[1:] {
@@ -176,7 +176,7 @@ func init() {
 			a := toFloat(args[0])
 			b := toFloat(args[1])
 			if a == nil || b == nil {
-    return ErrorWithHint(currentCallToken, "все приношения должны быть числами", "Принеси числа (INTEGER или FLOAT).")
+    return ErrorWithHint(getCurrentCallToken(), "все приношения должны быть числами", "Принеси числа (INTEGER или FLOAT).")
 			}
 			return &Float{Value: math.Pow(*a, *b)}
 		},
@@ -188,7 +188,7 @@ func init() {
 			}
 			a := toFloat(args[0])
 			if a == nil {
-    return ErrorWithHint(currentCallToken, "приношение должно быть числом", "Принеси число (INTEGER или FLOAT).")
+    return ErrorWithHint(getCurrentCallToken(), "приношение должно быть числом", "Принеси число (INTEGER или FLOAT).")
 			}
 			return &Float{Value: math.Sqrt(*a)}
 		},
@@ -208,7 +208,7 @@ func init() {
 			case *Float:
 				return &Float{Value: math.Abs(v.Value)}
 			default:
-				return ErrorWithHint(currentCallToken, "приношение должно быть числом", "Принеси число (INTEGER или FLOAT).")
+				return ErrorWithHint(getCurrentCallToken(), "приношение должно быть числом", "Принеси число (INTEGER или FLOAT).")
 			}
 		},
 	}
@@ -231,7 +231,7 @@ func init() {
 			} else {
 				// диапазон(нач, кон) или диапазон(нач, кон, шаг)
 				if args[0].Type() != "INTEGER" || args[1].Type() != "INTEGER" {
-					return ErrorWithHint(currentCallToken, "приношения должны быть целыми числами", "Принеси целые числа (INTEGER).")
+					return ErrorWithHint(getCurrentCallToken(), "приношения должны быть целыми числами", "Принеси целые числа (INTEGER).")
 				}
 				start = args[0].(*Integer).Value
 				end = args[1].(*Integer).Value
@@ -241,7 +241,7 @@ func init() {
 					}
 					step = args[2].(*Integer).Value
 					if step == 0 {
-						return ErrorWithHint(currentCallToken, "шаг не может быть нулём", "Употребляй шаг положительный или отрицательный.")
+						return ErrorWithHint(getCurrentCallToken(), "шаг не может быть нулём", "Употребляй шаг положительный или отрицательный.")
 					}
 				}
 			}

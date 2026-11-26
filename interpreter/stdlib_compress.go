@@ -31,10 +31,10 @@ func registerCompressModule() {
 			var buf bytes.Buffer
 			w := gzip.NewWriter(&buf)
 			if _, err := w.Write([]byte(s.Value)); err != nil {
-				return ErrorWithHint(currentCallToken, "грех сжатия gzip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех сжатия gzip: "+err.Error(), "")
 			}
 			if err := w.Close(); err != nil {
-				return ErrorWithHint(currentCallToken, "грех закрытия gzip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех закрытия gzip: "+err.Error(), "")
 			}
 			return &String{Value: base64.StdEncoding.EncodeToString(buf.Bytes())}
 		},
@@ -50,16 +50,16 @@ func registerCompressModule() {
 			}
 			raw, err := base64.StdEncoding.DecodeString(s.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "неверный base64: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "неверный base64: "+err.Error(), "")
 			}
 			r, err := gzip.NewReader(bytes.NewReader(raw))
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "грех распаковки gzip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех распаковки gzip: "+err.Error(), "")
 			}
 			defer r.Close()
 			out, err := io.ReadAll(r)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть gzip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть gzip: "+err.Error(), "")
 			}
 			return &String{Value: string(out)}
 		},
@@ -76,10 +76,10 @@ func registerCompressModule() {
 			var buf bytes.Buffer
 			w := zlib.NewWriter(&buf)
 			if _, err := w.Write([]byte(s.Value)); err != nil {
-				return ErrorWithHint(currentCallToken, "грех сжатия zlib: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех сжатия zlib: "+err.Error(), "")
 			}
 			if err := w.Close(); err != nil {
-				return ErrorWithHint(currentCallToken, "грех закрытия zlib: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех закрытия zlib: "+err.Error(), "")
 			}
 			return &String{Value: base64.StdEncoding.EncodeToString(buf.Bytes())}
 		},
@@ -95,16 +95,16 @@ func registerCompressModule() {
 			}
 			raw, err := base64.StdEncoding.DecodeString(s.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "неверный base64: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "неверный base64: "+err.Error(), "")
 			}
 			r, err := zlib.NewReader(bytes.NewReader(raw))
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "грех распаковки zlib: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех распаковки zlib: "+err.Error(), "")
 			}
 			defer r.Close()
 			out, err := io.ReadAll(r)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог прочесть zlib: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог прочесть zlib: "+err.Error(), "")
 			}
 			return &String{Value: string(out)}
 		},
@@ -123,7 +123,7 @@ func registerCompressModule() {
 			}
 			f, err := os.Create(dest.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог создать архив: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог создать архив: "+err.Error(), "")
 			}
 			defer f.Close()
 			zw := zip.NewWriter(f)
@@ -134,11 +134,11 @@ func registerCompressModule() {
 					w, err := zw.Create(p.Key.Inspect())
 					if err != nil {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "грех записи в zip: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех записи в zip: "+err.Error(), "")
 					}
 					if _, err := w.Write([]byte(p.Value.Inspect())); err != nil {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "грех записи в zip: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех записи в zip: "+err.Error(), "")
 					}
 				}
 			case *Array:
@@ -146,30 +146,30 @@ func registerCompressModule() {
 					ps, ok := el.(*String)
 					if !ok {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "в массиве путей все элементы должны быть строками", "")
+						return ErrorWithHint(getCurrentCallToken(), "в массиве путей все элементы должны быть строками", "")
 					}
 					data, err := os.ReadFile(ps.Value)
 					if err != nil {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "не смог прочесть файл: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "не смог прочесть файл: "+err.Error(), "")
 					}
 					w, err := zw.Create(filepath.Base(ps.Value))
 					if err != nil {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "грех записи в zip: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех записи в zip: "+err.Error(), "")
 					}
 					if _, err := w.Write(data); err != nil {
 						zw.Close()
-						return ErrorWithHint(currentCallToken, "грех записи в zip: "+err.Error(), "")
+						return ErrorWithHint(getCurrentCallToken(), "грех записи в zip: "+err.Error(), "")
 					}
 				}
 			default:
 				zw.Close()
-				return ErrorWithHint(currentCallToken, "второе приношение должно быть словарём {имя: содержимое} или массивом путей", "")
+				return ErrorWithHint(getCurrentCallToken(), "второе приношение должно быть словарём {имя: содержимое} или массивом путей", "")
 			}
 
 			if err := zw.Close(); err != nil {
-				return ErrorWithHint(currentCallToken, "грех закрытия zip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "грех закрытия zip: "+err.Error(), "")
 			}
 			return TRUE
 		},
@@ -188,7 +188,7 @@ func registerCompressModule() {
 			}
 			zr, err := zip.OpenReader(p.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог открыть zip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог открыть zip: "+err.Error(), "")
 			}
 			defer zr.Close()
 			elems := make([]Object, 0, len(zr.File))
@@ -209,20 +209,20 @@ func registerCompressModule() {
 			srcPath, ok1 := args[0].(*String)
 			destDir, ok2 := args[1].(*String)
 			if !ok1 || !ok2 {
-				return ErrorWithHint(currentCallToken, "оба приношения должны быть строками", "")
+				return ErrorWithHint(getCurrentCallToken(), "оба приношения должны быть строками", "")
 			}
 			zr, err := zip.OpenReader(srcPath.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "не смог открыть zip: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог открыть zip: "+err.Error(), "")
 			}
 			defer zr.Close()
 
 			absDest, err := filepath.Abs(destDir.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken, "неверный путь назначения: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "неверный путь назначения: "+err.Error(), "")
 			}
 			if err := os.MkdirAll(absDest, 0755); err != nil {
-				return ErrorWithHint(currentCallToken, "не смог создать папку: "+err.Error(), "")
+				return ErrorWithHint(getCurrentCallToken(), "не смог создать папку: "+err.Error(), "")
 			}
 
 			extracted := []Object{}
@@ -231,29 +231,29 @@ func registerCompressModule() {
 				// Защита от Zip Slip
 				if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(absDest)+string(os.PathSeparator)) &&
 					filepath.Clean(target) != filepath.Clean(absDest) {
-					return ErrorWithHint(currentCallToken, "опасный путь внутри архива: "+f.Name, "")
+					return ErrorWithHint(getCurrentCallToken(), "опасный путь внутри архива: "+f.Name, "")
 				}
 				if f.FileInfo().IsDir() {
 					_ = os.MkdirAll(target, 0755)
 					continue
 				}
 				if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-					return ErrorWithHint(currentCallToken, "не смог создать папку: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "не смог создать папку: "+err.Error(), "")
 				}
 				rc, err := f.Open()
 				if err != nil {
-					return ErrorWithHint(currentCallToken, "грех чтения из zip: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "грех чтения из zip: "+err.Error(), "")
 				}
 				out, err := os.Create(target)
 				if err != nil {
 					rc.Close()
-					return ErrorWithHint(currentCallToken, "не смог создать файл: "+err.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "не смог создать файл: "+err.Error(), "")
 				}
 				_, copyErr := io.Copy(out, rc)
 				out.Close()
 				rc.Close()
 				if copyErr != nil {
-					return ErrorWithHint(currentCallToken, "грех распаковки файла: "+copyErr.Error(), "")
+					return ErrorWithHint(getCurrentCallToken(), "грех распаковки файла: "+copyErr.Error(), "")
 				}
 				extracted = append(extracted, &String{Value: target})
 			}

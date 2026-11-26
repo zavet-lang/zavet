@@ -35,6 +35,7 @@ const (
 	OpGetGlobal
 	OpSetGlobal
 	OpDefineGlobal
+	OpDefineGlobalConst
 	OpGetLocal
 	OpSetLocal
 	OpBuildArray // Operand = count
@@ -42,6 +43,8 @@ const (
 	OpIndex      // stack: arr/hash, idx -> elem
 	OpSetIndex   // stack: arr/hash, idx, val -> val
 	OpCheckInt   // проверяет что вершина стека — int64
+	OpToBool     // приводит вершину стека к bool через truthy
+	OpError      // возвращает ошибку с текстом Constants[Operand]
 )
 
 // Instruction — одна инструкция байткода.

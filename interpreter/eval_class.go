@@ -122,7 +122,7 @@ func callParentMethod(indexExpr *ast.IndexExpression, parent *Hash, node *ast.Ca
 	if len(args) == 1 && isError(args[0]) {
 		return args[0]
 	}
-	return applyBoundMethod(&BoundMethod{Self: inst, Fn: fn, Owner: owner}, args, node.Token)
+	return applyBoundMethod(&BoundMethod{Self: inst, Fn: fn, Owner: owner}, args, node.Token, env)
 }
 
 func validateClassStaticTypes(tok lexer.Token, classHash *Hash) *Error {

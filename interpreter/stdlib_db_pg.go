@@ -24,13 +24,13 @@ func registerPostgresInDB() {
 			return err
 		}
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken,
+			return ErrorWithHint(getCurrentCallToken(),
 				"подключить потребна строка подключения",
 				"бд.подключить(\"postgres://user:pass@localhost:5432/dbname?sslmode=disable\")")
 		}
 		connStr, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "приношение должно быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой", "")
 		}
 
 		// Поддерживаем оба формата:
@@ -41,11 +41,11 @@ func registerPostgresInDB() {
 
 		db, err := sql.Open(driverName, dsn)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог открыть PostgreSQL: "+err.Error(), "Вникни в строку подключения.")
+			return ErrorWithHint(getCurrentCallToken(), "не смог открыть PostgreSQL: "+err.Error(), "Вникни в строку подключения.")
 		}
 		if err := db.Ping(); err != nil {
 			db.Close()
-			return ErrorWithHint(currentCallToken, "не смог подключиться к PostgreSQL: "+err.Error(),
+			return ErrorWithHint(getCurrentCallToken(), "не смог подключиться к PostgreSQL: "+err.Error(),
 				"Вникни: запущен ли сервер и верны ли данные.")
 		}
 
@@ -77,11 +77,11 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 	// транзакция
 	h.Set(&String{Value: "транзакция"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 || (args[0].Type() != "FUNCTION" && args[0].Type() != "BUILTIN") {
-			return ErrorWithHint(currentCallToken, "транзакция потребна одной функции", "")
+			return ErrorWithHint(getCurrentCallToken(), "транзакция потребна одной функции", "")
 		}
 		tx, err := db.Begin()
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "не смог начать транзакцию: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог начать транзакцию: "+err.Error(), "")
 		}
 		txHash := makeExecutorMethods(&pgTxExecutor{tx: tx})
 		result := ApplyFunctionCallback(args[0], []Object{txHash})
@@ -90,7 +90,7 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 			return result
 		}
 		if err := tx.Commit(); err != nil {
-			return ErrorWithHint(currentCallToken, "не смог зафиксировать: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "не смог зафиксировать: "+err.Error(), "")
 		}
 		return result
 	}})
@@ -98,11 +98,11 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 	// подготовить
 	h.Set(&String{Value: "подготовить"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "подготовить(sql)", "")
+			return ErrorWithHint(getCurrentCallToken(), "подготовить(sql)", "")
 		}
 		s, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "приношение должно быть строкой SQL", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой SQL", "")
 		}
 		converted := convertPlaceholders(s.Value)
 		return newPreparedStatement(db, converted)
@@ -112,7 +112,7 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 	h.Set(&String{Value: "таблицы"}, &Builtin{Fn: func(args ...Object) Object {
 		rows, err := db.Query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "грех: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех: "+err.Error(), "")
 		}
 		defer rows.Close()
 		result := []Object{}
@@ -127,11 +127,11 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 	// колонки
 	h.Set(&String{Value: "колонки"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) != 1 {
-			return ErrorWithHint(currentCallToken, "колонки(таблица)", "")
+			return ErrorWithHint(getCurrentCallToken(), "колонки(таблица)", "")
 		}
 		tableName, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "приношение должно быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "приношение должно быть строкой", "")
 		}
 		rows, err := db.Query(`
 			SELECT column_name, data_type, is_nullable, column_default,
@@ -142,7 +142,7 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 			WHERE table_schema = 'public' AND table_name = $1
 			ORDER BY ordinal_position`, tableName.Value)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, "грех: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех: "+err.Error(), "")
 		}
 		defer rows.Close()
 		result := []Object{}
@@ -170,15 +170,15 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 	h.Set(&String{Value: "мигрировать"}, &Builtin{Fn: func(args ...Object) Object {
 		db.Exec("CREATE TABLE IF NOT EXISTS __миграции__ (версия INTEGER PRIMARY KEY, применена TIMESTAMP DEFAULT NOW())")
 		if len(args) != 2 {
-			return ErrorWithHint(currentCallToken, "мигрировать(версия, sql)", "")
+			return ErrorWithHint(getCurrentCallToken(), "мигрировать(версия, sql)", "")
 		}
 		versionObj, ok := args[0].(*Integer)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "версия должна быть целым числом", "")
+			return ErrorWithHint(getCurrentCallToken(), "версия должна быть целым числом", "")
 		}
 		sqlStr, ok := args[1].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "второе приношение — SQL", "")
+			return ErrorWithHint(getCurrentCallToken(), "второе приношение — SQL", "")
 		}
 		var count int
 		db.QueryRow("SELECT COUNT(*) FROM __миграции__ WHERE версия = $1", versionObj.Value).Scan(&count)
@@ -187,7 +187,7 @@ func newPgConnection(db *sql.DB, connStr string) *Hash {
 		}
 		_, err := db.Exec(sqlStr.Value)
 		if err != nil {
-			return ErrorWithHint(currentCallToken, fmt.Sprintf("грех миграции %d: %s", versionObj.Value, err.Error()), "")
+			return ErrorWithHint(getCurrentCallToken(), fmt.Sprintf("грех миграции %d: %s", versionObj.Value, err.Error()), "")
 		}
 		db.Exec("INSERT INTO __миграции__ (версия) VALUES ($1)", versionObj.Value)
 		return TRUE

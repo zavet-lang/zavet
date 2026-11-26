@@ -22,7 +22,7 @@ func init() {
 			}
 			content, err := os.ReadFile(path)
 			if err != nil {
-				return ErrorFileNotFound(currentCallToken, path)
+				return ErrorFileNotFound(getCurrentCallToken(), path)
 			}
 			return &String{Value: string(content)}
 		},
@@ -49,7 +49,7 @@ func init() {
 			err := os.WriteFile(path, []byte(content), 0644)
 			if err != nil {
 				return ErrorWithHint(
-					currentCallToken,
+					getCurrentCallToken(),
 					fmt.Sprintf("не смог записать файл '%s': %s", path, err.Error()),
 					"Вникни, дозволен ли доступ и есть ли папка.",
 				)
@@ -77,7 +77,7 @@ func init() {
 				return FALSE
 			}
 			return ErrorWithHint(
-				currentCallToken,
+				getCurrentCallToken(),
 				fmt.Sprintf("не смог проверить файл: %s", err.Error()),
 				"Вникни, дозволен ли доступ к файлу.",
 			)

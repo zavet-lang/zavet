@@ -25,7 +25,7 @@ func denyIfSafe(op string) Object {
 		return nil
 	}
 	return ErrorWithHint(
-		currentCallToken,
+		getCurrentCallToken(),
 		"сия операция «"+op+"» запретна в безопасном стане",
 		"Запусти без --безопасный, коли доверяешь сему свитку.",
 	)
@@ -87,18 +87,18 @@ func CheckPath(path string) Object {
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "неверный путь: "+path, "")
+		return ErrorWithHint(getCurrentCallToken(), "неверный путь: "+path, "")
 	}
 	root, err := filepath.Abs(SafeRoot)
 	if err != nil {
-		return ErrorWithHint(currentCallToken, "неверный корень песочницы", "")
+		return ErrorWithHint(getCurrentCallToken(), "неверный корень песочницы", "")
 	}
 	abs = filepath.Clean(abs)
 	root = filepath.Clean(root)
 	rel, err := filepath.Rel(root, abs)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return ErrorWithHint(
-			currentCallToken,
+			getCurrentCallToken(),
 			"путь за пределами песочницы: "+path,
 			"В --безопасный доступны лишь файлы внутри "+root,
 		)
@@ -113,7 +113,7 @@ func CheckHost(rawURL string) Object {
 	}
 	if len(SafeHosts) == 0 {
 		return ErrorWithHint(
-			currentCallToken,
+			getCurrentCallToken(),
 			"сеть запретна в безопасном стане",
 			"Укажите --разрешить-хост=example.com",
 		)
@@ -143,7 +143,7 @@ func checkHostName(host string) Object {
 		}
 	}
 	return ErrorWithHint(
-		currentCallToken,
+		getCurrentCallToken(),
 		"хост «"+host+"» не в числе дозволенных",
 		"Прибавь --разрешить-хост="+host,
 	)

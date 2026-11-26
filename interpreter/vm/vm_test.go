@@ -178,6 +178,48 @@ func TestVMInterpolatedStringFallback(t *testing.T) {
 	}
 }
 
+func TestVMSemanticParity(t *testing.T) {
+	out := runVM(t, `
+возгласи([1, 2] == [1, 2], [1] == [2], {"a": 1} == {"a": 1})
+возгласи(1 == 1.0, ничего == ложь, 1 и 2, 0 или "а")
+возгласи("a" < "b", "b" < "a", "a" <= "b", "b" <= "a")
+`)
+	want := "истина ложь истина\nистина истина истина истина\nистина ложь истина ложь"
+	if strings.TrimSpace(out) != want {
+		t.Fatalf("expected:\n%s\ngot:\n%s", want, strings.TrimSpace(out))
+	}
+}
+
+func TestVMErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"global let reassign", "пусть x = 1\nx = 2"},
+		{"local let reassign", "слово ф()\nпусть x = 1\nx = 2\nконец\nф()"},
+		{"undefined global", "возгласи(нету_такой)"},
+		{"string sub int", `возгласи("a" - 1)`},
+		{"cmp int string", `возгласи(1 < "a")`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := lexer.New(tc.src)
+			p := parser.New(l)
+			prog := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse: %v", p.Errors())
+			}
+			chunk, err := Compile(prog)
+			if err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+			if err := New(chunk).Run(); err == nil {
+				t.Fatalf("expected runtime error for %s", tc.name)
+			}
+		})
+	}
+}
+
 func BenchmarkVMFib20(b *testing.B) {
 	src := `
 слово фиб(n)

@@ -16,7 +16,7 @@ import (
 func jsonParseString(s string) Object {
 	var data interface{}
 	if err := json.Unmarshal([]byte(s), &data); err != nil {
-		return ErrorInvalidJSON(currentCallToken)
+		return ErrorInvalidJSON(getCurrentCallToken())
 	}
 	return nativeToObject(data)
 }
@@ -60,13 +60,13 @@ func registerRegexModule() {
 			text, ok1 := args[0].(*String)
 			pat, ok2 := args[1].(*String)
 			if !ok1 || !ok2 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"регвыр.найти(строка, шаблон)",
 					"Оба приношения должны быть строками.")
 			}
 			re, err := regexp.Compile(pat.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					fmt.Sprintf("неверный узор регулярного выражения: %s", err.Error()),
 					"Вникни в строение узора.")
 			}
@@ -85,13 +85,13 @@ func registerRegexModule() {
 			pat, ok2 := args[1].(*String)
 			rep, ok3 := args[2].(*String)
 			if !ok1 || !ok2 || !ok3 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"регвыр.заменить(строка, шаблон, замена)",
 					"Все приношения должны быть строками.")
 			}
 			re, err := regexp.Compile(pat.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					fmt.Sprintf("неверный узор регулярного выражения: %s", err.Error()),
 					"Вникни в строение узора.")
 			}
@@ -104,13 +104,13 @@ func registerRegexModule() {
 			text, ok1 := args[0].(*String)
 			pat, ok2 := args[1].(*String)
 			if !ok1 || !ok2 {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					"регвыр.совпадает(строка, шаблон)",
 					"Оба приношения должны быть строками.")
 			}
 			re, err := regexp.Compile(pat.Value)
 			if err != nil {
-				return ErrorWithHint(currentCallToken,
+				return ErrorWithHint(getCurrentCallToken(),
 					fmt.Sprintf("неверный узор регулярного выражения: %s", err.Error()),
 					"Вникни в строение узора.")
 			}
@@ -143,11 +143,11 @@ func extendHttpModule() {
 		}
 		port, ok := args[0].(*Integer)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "порт должен быть числом", "http.сервер(8080, обработчик)")
+			return ErrorWithHint(getCurrentCallToken(), "порт должен быть числом", "http.сервер(8080, обработчик)")
 		}
 		handler := args[1]
 		if handler.Type() != "FUNCTION" {
-			return ErrorWithHint(currentCallToken, "второе приношение — функция", "")
+			return ErrorWithHint(getCurrentCallToken(), "второе приношение — функция", "")
 		}
 
 		mux := http.NewServeMux()
@@ -160,7 +160,7 @@ func extendHttpModule() {
 		addr := fmt.Sprintf(":%d", port.Value)
 		fmt.Printf("Сервер запущен на http://localhost:%d\n", port.Value)
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			return ErrorWithHint(currentCallToken, "грех сервера: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех сервера: "+err.Error(), "")
 		}
 		return NULL
 	}})
@@ -368,11 +368,11 @@ func newHTTPApp() *Hash {
 	addRoute := func(method string) *Builtin {
 		return &Builtin{Fn: func(args ...Object) Object {
 			if len(args) < 2 {
-				return ErrorWithHint(currentCallToken, method+"(путь, обработчик)", "")
+				return ErrorWithHint(getCurrentCallToken(), method+"(путь, обработчик)", "")
 			}
 			path, ok := args[0].(*String)
 			if !ok {
-				return ErrorWithHint(currentCallToken, "путь должен быть строкой", "")
+				return ErrorWithHint(getCurrentCallToken(), "путь должен быть строкой", "")
 			}
 			*routes = append(*routes, httpRoute{method: method, path: path.Value, handler: args[1]})
 			return app
@@ -386,15 +386,15 @@ func newHTTPApp() *Hash {
 	app.Set(&String{Value: "патч"}, addRoute("PATCH"))
 	app.Set(&String{Value: "маршрут"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) < 3 {
-			return ErrorWithHint(currentCallToken, "маршрут(метод, путь, обработчик)", "")
+			return ErrorWithHint(getCurrentCallToken(), "маршрут(метод, путь, обработчик)", "")
 		}
 		m, ok := args[0].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "метод должен быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "метод должен быть строкой", "")
 		}
 		p, ok := args[1].(*String)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "путь должен быть строкой", "")
+			return ErrorWithHint(getCurrentCallToken(), "путь должен быть строкой", "")
 		}
 		*routes = append(*routes, httpRoute{method: strings.ToUpper(m.Value), path: p.Value, handler: args[2]})
 		return app
@@ -413,12 +413,12 @@ func newHTTPApp() *Hash {
 	// Статические файлы
 	app.Set(&String{Value: "статика"}, &Builtin{Fn: func(args ...Object) Object {
 		if len(args) < 2 {
-			return ErrorWithHint(currentCallToken, "статика(url_путь, папка)", "статика(\"/static\", \"./public\")")
+			return ErrorWithHint(getCurrentCallToken(), "статика(url_путь, папка)", "статика(\"/static\", \"./public\")")
 		}
 		urlPath, _ := args[0].(*String)
 		dirPath, _ := args[1].(*String)
 		if urlPath == nil || dirPath == nil {
-			return ErrorWithHint(currentCallToken, "аргументы должны быть строками", "")
+			return ErrorWithHint(getCurrentCallToken(), "аргументы должны быть строками", "")
 		}
 		*routes = append(*routes, httpRoute{method: "__STATIC__", path: urlPath.Value, handler: &String{Value: dirPath.Value}})
 		return app
@@ -430,11 +430,11 @@ func newHTTPApp() *Hash {
 			return err
 		}
 		if len(args) < 1 {
-			return ErrorWithHint(currentCallToken, "запустить(порт)", "")
+			return ErrorWithHint(getCurrentCallToken(), "запустить(порт)", "")
 		}
 		port, ok := args[0].(*Integer)
 		if !ok {
-			return ErrorWithHint(currentCallToken, "порт должен быть числом", "")
+			return ErrorWithHint(getCurrentCallToken(), "порт должен быть числом", "")
 		}
 
 		mux := http.NewServeMux()
@@ -488,7 +488,7 @@ func newHTTPApp() *Hash {
 		addr := fmt.Sprintf(":%d", port.Value)
 		fmt.Printf("HTTP-сервер запущен на http://localhost:%d\n", port.Value)
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			return ErrorWithHint(currentCallToken, "грех: "+err.Error(), "")
+			return ErrorWithHint(getCurrentCallToken(), "грех: "+err.Error(), "")
 		}
 		return NULL
 	}})
