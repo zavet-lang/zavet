@@ -31,6 +31,7 @@ import (
 	"zavet/lexer"
 	"zavet/linter"
 	"zavet/parser"
+	"zavet/pkgmgr"
 )
 
 // MCP-протокол: версия 2024-11-05.
@@ -432,37 +433,22 @@ func toolModuleInfo(name string) ([]map[string]any, bool) {
 }
 
 func toolSearchPackages(query string) ([]map[string]any, bool) {
-	// Загружаем реестр напрямую
-	registryURL := "https://raw.githubusercontent.com/zavet-lang/zavet-registry/main/registry.json"
-	cmd := exec.Command("curl", "-sf", "-H", "Cache-Control: no-cache", registryURL)
-	out, err := cmd.Output()
+	reg, err := pkgmgr.FetchRegistry()
 	if err != nil {
 		return textContent("не смог призвать реестр: " + err.Error()), true
 	}
-	var registry struct {
-		Packages map[string]struct {
-			URL  string `json:"url"`
-			Desc string `json:"описание"`
-		} `json:"пакеты"`
-	}
-	if err := json.Unmarshal(out, &registry); err != nil {
-		return textContent("грех разбора реестра: " + err.Error()), true
+
+	names := reg.Search(query)
+	if len(names) == 0 {
+		return textContent("ничего не найдено по запросу: " + query), false
 	}
 
 	var sb strings.Builder
-	q := strings.ToLower(query)
-	count := 0
-	for name, pkg := range registry.Packages {
-		if q != "" && !strings.Contains(strings.ToLower(name), q) && !strings.Contains(strings.ToLower(pkg.Desc), q) {
-			continue
-		}
-		sb.WriteString(fmt.Sprintf("**%s** — %s\n  Установить: zavet подключить %s\n  Репо: %s\n\n", name, pkg.Desc, name, pkg.URL))
-		count++
+	for _, name := range names {
+		pkg := reg.Packages[name]
+		sb.WriteString(fmt.Sprintf("**%s** — %s\n  Установить: zavet подключить %s\n  Репо: %s\n\n", name, pkg.Description, name, pkg.URL))
 	}
-	if count == 0 {
-		return textContent("ничего не найдено по запросу: " + query), false
-	}
-	return textContent(fmt.Sprintf("Найдено: %d\n\n%s", count, sb.String())), false
+	return textContent(fmt.Sprintf("Найдено: %d\n\n%s", len(names), sb.String())), false
 }
 
 func toolLanguageReference() ([]map[string]any, bool) {

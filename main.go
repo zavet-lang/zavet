@@ -142,7 +142,7 @@ func printUsage() {
 	fmt.Println("Примеры:")
 	fmt.Println("  zavet инит мой_проект")
 	fmt.Println("  cd мой_проект")
-	fmt.Println("  zavet подключить матем            # короткое имя из реестра")
+	fmt.Println("  zavet подключить тг               # короткое имя из реестра")
 	fmt.Println("  zavet подключить github.com/у/п@v1.0.0    # полный URL и тег")
 	fmt.Println("  zavet запустить")
 	fmt.Println()

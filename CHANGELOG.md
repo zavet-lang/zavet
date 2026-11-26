@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+### Реестр и пакеты
+- Удалены несуществующие пакеты-заглушки и ссылки на `zavet-registry`; официальный реестр (`registry/registry.json`) переведён на `zavet-lang/zavet`
+- Созданы и опубликованы 4 реальных рабочих пакета на Завете с тестами: [`тг`](https://github.com/zavet-lang/zavet-tg), [`цвета`](https://github.com/zavet-lang/zavet-colors), [`дата`](https://github.com/zavet-lang/zavet-date), [`валидатор`](https://github.com/zavet-lang/zavet-validator)
+- MCP `search_packages` переведён на `pkgmgr.FetchRegistry()` (работает онлайн и офлайн без внешнего `curl`)
+
 ## 1.1.0
 
 ### Новые возможности

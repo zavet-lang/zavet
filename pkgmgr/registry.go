@@ -11,7 +11,7 @@ import (
 )
 
 // RegistryURL — URL официального реестра коротких имён пакетов Завета.
-const RegistryURL = "https://raw.githubusercontent.com/zavet-lang/zavet-registry/main/registry.json"
+const RegistryURL = "https://raw.githubusercontent.com/zavet-lang/zavet/main/registry/registry.json"
 
 // RegistryEntry представляет один пакет в реестре.
 type RegistryEntry struct {
@@ -26,27 +26,16 @@ type Registry struct {
 	Packages map[string]*RegistryEntry `json:"пакеты"`
 }
 
-// DefaultRegistry возвращает встроенный каталог пакетов Завета.
+// DefaultRegistry возвращает встроенный каталог проверенных пакетов Завета.
 // Используется как база и как резерв при отсутствии сети.
 func DefaultRegistry() *Registry {
 	return &Registry{
 		Version: 2,
 		Packages: map[string]*RegistryEntry{
-			"веб":       {URL: "https://github.com/zavet-lang/zavet-web", Description: "Веб-фреймворк с маршрутизацией, группами, middleware и шаблонами", Category: "веб"},
-			"валидатор": {URL: "https://github.com/zavet-lang/zavet-validator", Description: "Проверка схем данных, email, URL, диапазонов и форм", Category: "данные"},
-			"логгер":    {URL: "https://github.com/zavet-lang/zavet-logger", Description: "Структурированное логирование с уровнями и JSON-выводом", Category: "инструменты"},
-			"конфиг":    {URL: "https://github.com/zavet-lang/zavet-config", Description: "Чтение конфигурации из .env, JSON и YAML", Category: "инструменты"},
-			"кэш":       {URL: "https://github.com/zavet-lang/zavet-cache", Description: "In-memory и LRU-кэш с TTL", Category: "данные"},
-			"jwt":       {URL: "https://github.com/zavet-lang/zavet-jwt", Description: "Утилиты аутентификации и middleware на базе JWT", Category: "безопасность"},
-			"почта":     {URL: "https://github.com/zavet-lang/zavet-mail", Description: "Шаблоны писем и очередь рассылки поверх модуля почта", Category: "сеть"},
-			"маркдаун":  {URL: "https://github.com/zavet-lang/zavet-markdown", Description: "Преобразование Markdown в HTML и оглавление", Category: "текст"},
-			"uuid":      {URL: "https://github.com/zavet-lang/zavet-uuid", Description: "Генерация и проверка UUID v4/v7", Category: "данные"},
-			"цвета":     {URL: "https://github.com/zavet-lang/zavet-colors", Description: "ANSI-цвета и таблицы в терминале", Category: "cli"},
-			"миграции":  {URL: "https://github.com/zavet-lang/zavet-migrations", Description: "Управление миграциями SQLite и PostgreSQL", Category: "бд"},
-			"тесты":     {URL: "https://github.com/zavet-lang/zavet-assert", Description: "Расширенные проверки, моки и отчёты для тестов", Category: "тестирование"},
-			"дата":      {URL: "https://github.com/zavet-lang/zavet-date", Description: "Форматирование дат на русском, интервалы и часовые пояса", Category: "время"},
-			"очередь":   {URL: "https://github.com/zavet-lang/zavet-queue", Description: "Асинхронная очередь задач и планировщик cron", Category: "асинхронность"},
-			"тг":        {URL: "https://github.com/zavet-lang/zavet-tg", Description: "Клиент Telegram Bot API (команды, клавиатуры, вебхуки)", Category: "боты"},
+			"валидатор": {URL: "https://github.com/zavet-lang/zavet-validator", Description: "Проверка email, URL, диапазонов, строк и схем словарей", Category: "данные"},
+			"дата":      {URL: "https://github.com/zavet-lang/zavet-date", Description: "Форматирование дат на русском, склонение интервалов и календарь", Category: "время"},
+			"тг":        {URL: "https://github.com/zavet-lang/zavet-tg", Description: "Клиент Telegram Bot API (опрос, команды, клавиатуры, вебхуки)", Category: "боты"},
+			"цвета":     {URL: "https://github.com/zavet-lang/zavet-colors", Description: "ANSI-цвета, стили текста и таблицы в терминале", Category: "cli"},
 		},
 	}
 }
