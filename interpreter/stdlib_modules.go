@@ -39,6 +39,12 @@ func registerJsonModule() {
 			}
 			return &String{Value: objectToJSON(args[0])}
 		},
+		"строка": func(args ...Object) Object {
+			if len(args) != 1 {
+				return builtinErrorWrongArgCount("json.строка", 1, len(args))
+			}
+			return &String{Value: objectToJSON(args[0])}
+		},
 	}
 	stdModules["json"] = makeHashFromBuiltins(fns)
 }

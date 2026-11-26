@@ -268,9 +268,31 @@ func (m *Machine) Run() error {
 			m.stack = m.stack[:base]
 			m.stack = append(m.stack, elems)
 
+		case OpBuildHash:
+			cnt := ins.Operand
+			base := len(m.stack) - cnt*2
+			h := newVMHash(cnt)
+			for i := 0; i < cnt; i++ {
+				k := m.stack[base+i*2]
+				v := m.stack[base+i*2+1]
+				if err := h.set(k, v); err != nil {
+					return err
+				}
+			}
+			m.stack = m.stack[:base]
+			m.stack = append(m.stack, h)
+
 		case OpIndex:
 			idxObj := m.pop()
 			arrObj := m.pop()
+			if h, ok := arrObj.(*vmHash); ok {
+				v, err := h.get(idxObj)
+				if err != nil {
+					return err
+				}
+				m.stack = append(m.stack, v)
+				break
+			}
 			idx, ok := idxObj.(int64)
 			if !ok {
 				return fmt.Errorf("индекс стада должен быть целым")
@@ -301,6 +323,13 @@ func (m *Machine) Run() error {
 			val := m.pop()
 			idxObj := m.pop()
 			arrObj := m.pop()
+			if h, ok := arrObj.(*vmHash); ok {
+				if err := h.set(idxObj, val); err != nil {
+					return err
+				}
+				m.stack = append(m.stack, val)
+				break
+			}
 			arr, ok1 := arrObj.([]any)
 			idx, ok2 := idxObj.(int64)
 			if !ok1 || !ok2 {
@@ -320,6 +349,8 @@ func (m *Machine) Run() error {
 			switch x := v.(type) {
 			case []any:
 				m.stack = append(m.stack, int64(len(x)))
+			case *vmHash:
+				m.stack = append(m.stack, int64(len(x.order)))
 			case string:
 				m.stack = append(m.stack, int64(utf8.RuneCountInString(x)))
 			default:
@@ -428,9 +459,79 @@ func format(v any) string {
 			out += format(el)
 		}
 		return out + "]"
+	case *vmHash:
+		out := "{"
+		for i, k := range x.order {
+			if i > 0 {
+				out += ", "
+			}
+			p := x.pairs[k]
+			out += format(p.key) + ": " + format(p.val)
+		}
+		return out + "}"
 	default:
 		return fmt.Sprint(x)
 	}
+}
+
+type vmHashKey struct {
+	kind byte // 1=string, 2=int64, 3=bool
+	s    string
+	i    int64
+	b    bool
+}
+
+type vmHashPair struct {
+	key any
+	val any
+}
+
+type vmHash struct {
+	pairs map[vmHashKey]vmHashPair
+	order []vmHashKey
+}
+
+func newVMHash(capHint int) *vmHash {
+	return &vmHash{
+		pairs: make(map[vmHashKey]vmHashPair, capHint),
+		order: make([]vmHashKey, 0, capHint),
+	}
+}
+
+func makeVMHashKey(k any) (vmHashKey, error) {
+	switch v := k.(type) {
+	case string:
+		return vmHashKey{kind: 1, s: v}, nil
+	case int64:
+		return vmHashKey{kind: 2, i: v}, nil
+	case bool:
+		return vmHashKey{kind: 3, b: v}, nil
+	default:
+		return vmHashKey{}, fmt.Errorf("недопустимый вид ключа словаря")
+	}
+}
+
+func (h *vmHash) set(k, v any) error {
+	hk, err := makeVMHashKey(k)
+	if err != nil {
+		return err
+	}
+	if _, exists := h.pairs[hk]; !exists {
+		h.order = append(h.order, hk)
+	}
+	h.pairs[hk] = vmHashPair{key: k, val: v}
+	return nil
+}
+
+func (h *vmHash) get(k any) (any, error) {
+	hk, err := makeVMHashKey(k)
+	if err != nil {
+		return nil, err
+	}
+	if p, ok := h.pairs[hk]; ok {
+		return p.val, nil
+	}
+	return nil, nil
 }
 
 func asFloat(v any) (float64, bool) {

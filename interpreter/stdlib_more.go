@@ -209,7 +209,9 @@ func registerFilesModule() {
 	// Безопасный режим: изменяющие операции запрещены, остальные — в песочнице.
 	guardDeny(fns, "файлы.", "добавить", "переименовать", "создать_дир", "удалить_дир")
 	guardPath(fns, "читать", "записать", "существует", "удалить", "список", "размер", "это_файл", "это_дир")
-	stdModules["файлы"] = makeHashFromBuiltins(fns)
+	filesMod := makeHashFromBuiltins(fns)
+	stdModules["файлы"] = filesMod
+	stdModules["файл"] = filesMod
 }
 
 // === Модуль "путь" ===

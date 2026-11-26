@@ -360,8 +360,9 @@ func (l *Lexer) readNumber() Token {
 func (l *Lexer) readString(quote rune) string {
 	var result []rune
 	hasInterpolation := false
+	hasEscapedBrace := false
 	braceDepth := 0
-	
+
 	// Читаем строку и проверяем интерполяцию
 	for {
 		l.readChar()
@@ -372,25 +373,51 @@ func (l *Lexer) readString(quote rune) string {
 		if l.ch == quote && braceDepth == 0 {
 			break
 		}
-		if l.ch == '\\' && braceDepth == 0 {
-			// Экранирование работает только вне {...}
-			l.readChar()
-			switch l.ch {
-			case 'n':
-				result = append(result, '\n')
-			case 't':
-				result = append(result, '\t')
-			case 'r':
-				result = append(result, '\r')
-			case 'b':
-				result = append(result, '\b')
-			case '"':
+		if l.ch == '\\' {
+			if braceDepth == 0 {
+				l.readChar()
+				if quote == '\'' {
+					// В одинарных кавычках обрабатываем только \' и \\;
+					// остальные \x сохраняются как \x (удобно для регулярных выражений).
+					switch l.ch {
+					case '\'':
+						result = append(result, '\'')
+					case '\\':
+						result = append(result, '\\')
+					default:
+						result = append(result, '\\', l.ch)
+					}
+				} else {
+					switch l.ch {
+					case 'n':
+						result = append(result, '\n')
+					case 't':
+						result = append(result, '\t')
+					case 'r':
+						result = append(result, '\r')
+					case 'b':
+						result = append(result, '\b')
+					case '"':
+						result = append(result, '"')
+					case '\'':
+						result = append(result, '\'')
+					case '\\':
+						result = append(result, '\\')
+					case '{':
+						hasEscapedBrace = true
+						result = append(result, '\x01')
+					case '}':
+						hasEscapedBrace = true
+						result = append(result, '\x02')
+					default:
+						result = append(result, l.ch)
+					}
+				}
+			} else if quote == '"' && l.peekChar() == '"' {
+				// Внутри интерполяции {…} допускаем \" как "
+				l.readChar()
 				result = append(result, '"')
-			case '\'':
-				result = append(result, '\'')
-			case '\\':
-				result = append(result, '\\')
-			default:
+			} else {
 				result = append(result, l.ch)
 			}
 		} else {
@@ -403,12 +430,22 @@ func (l *Lexer) readString(quote rune) string {
 			result = append(result, l.ch)
 		}
 	}
-	
-	// Если есть интерполяция, добавляем маркер в начало
+
+	// Если есть интерполяция, добавляем маркер в начало (\x01/\x02 восстановит evalInterpolatedString)
 	if hasInterpolation {
 		return "\x00" + string(result)
 	}
-	
+
+	if hasEscapedBrace {
+		for i, r := range result {
+			if r == '\x01' {
+				result[i] = '{'
+			} else if r == '\x02' {
+				result[i] = '}'
+			}
+		}
+	}
+
 	return string(result)
 }
 

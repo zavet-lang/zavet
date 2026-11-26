@@ -285,6 +285,9 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 		cp.chunk.emit(OpConstant, cp.chunk.addConstant(e.Value))
 		return nil
 	case *ast.StringLiteral:
+		if len(e.Value) > 0 && e.Value[0] == '\x00' {
+			return &CompileError{Msg: "VM: интерполяция строки через tree-walker"}
+		}
 		cp.chunk.emit(OpConstant, cp.chunk.addConstant(e.Value))
 		return nil
 	case *ast.NullLiteral:
@@ -315,6 +318,29 @@ func (cp *compiler) compileExpr(expr ast.Expression) error {
 			}
 		}
 		cp.chunk.emit(OpBuildArray, len(e.Elements))
+		return nil
+	case *ast.HashLiteral:
+		// Определения образов (классов) содержат служебный ключ __class__ — оставляем tree-walker.
+		keys := e.KeyOrder
+		if len(keys) == 0 && len(e.Pairs) > 0 {
+			for k := range e.Pairs {
+				keys = append(keys, k)
+			}
+		}
+		for _, k := range keys {
+			if sl, ok := k.(*ast.StringLiteral); ok && sl.Value == "__class__" {
+				return &CompileError{Msg: "VM: образ (класс) через tree-walker"}
+			}
+		}
+		for _, k := range keys {
+			if err := cp.compileExpr(k); err != nil {
+				return err
+			}
+			if err := cp.compileExpr(e.Pairs[k]); err != nil {
+				return err
+			}
+		}
+		cp.chunk.emit(OpBuildHash, len(keys))
 		return nil
 	case *ast.IndexExpression:
 		if err := cp.compileExpr(e.Left); err != nil {

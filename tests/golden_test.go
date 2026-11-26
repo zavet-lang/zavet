@@ -262,3 +262,95 @@ func TestRepeatStaticTooling(t *testing.T) {
 		}
 	}
 }
+
+// TestCoreQualityImprovements проверяет строгую интерполяцию, ленивые и/или,
+// одинарные raw-строки для регулярок, алиасы stdlib, валидацию HTTP-таймаута
+// и статическую проверку типов в линтере.
+func TestCoreQualityImprovements(t *testing.T) {
+	// 1. Ленивые и / или в AST (правый операнд не вычисляется)
+	lazyCode := `
+пусть x = ничего
+возгласи(x != ничего и x["ключ"] == 1)
+возгласи(истина или (1 / 0 == 0))
+возгласи(ложь и (1 / 0 == 0))
+`
+	if out := strings.TrimSpace(runProgram(t, lazyCode, "lazy.молитва")); out != "ложь\nистина\nложь" {
+		t.Fatalf("ленивые и/или дали %q", out)
+	}
+
+	// 2. Интерполяция: валидные формы (включая \" внутри {...} и \{ \}) + raw-одинарные кавычки
+	interpOK := `
+пусть отв = {"статус": 200}
+возгласи("статус {отв[\"статус\"]}, скобки \{ок\}")
+возгласи(регвыр.совпадает("abc123", '^[a-z]+\d+$'))
+возгласи(json.строка({"a": 1}) == json.создать({"a": 1}))
+возгласи(файл.существует("__no_such_file__") == файлы.существует("__no_such_file__"))
+`
+	if out := strings.TrimSpace(runProgram(t, interpOK, "interp_ok.молитва")); out != "статус 200, скобки {ок}\nистина\nистина\nистина" {
+		t.Fatalf("неожиданный вывод interpOK: %q", out)
+	}
+
+	// 3. Интерполяция: невалидное выражение, пустые {} и незакрытая { — ошибки
+	badInterps := []string{
+		`возгласи("плохо {1 + * 2}")`,
+		`возгласи("пусто {}")`,
+		`возгласи("незакрыто {x")`,
+		`пусть s = "незакрыто {x"`,
+		`http.получить("http://127.0.0.1:1", -5)`,
+	}
+	for _, code := range badInterps {
+		prev := interpreter.OutputWriter
+		interpreter.OutputWriter = &bytes.Buffer{}
+		l := lexer.New(code)
+		p := parser.New(l)
+		prog := p.ParseProgram()
+		hasErr := len(p.Errors()) > 0
+		var res interpreter.Object
+		if !hasErr {
+			env := interpreter.NewEnvironment()
+			res = interpreter.Eval(prog, env)
+			hasErr = res != nil && res.Type() == "ERROR"
+		}
+		interpreter.OutputWriter = prev
+		if !hasErr {
+			t.Fatalf("ожидалась ошибка для %q, получено %v", code, res)
+		}
+	}
+
+	// 4. Статическая проверка типов в линтере
+	badTypes := `
+пусть а: целое = "строка"
+измени б: строка = "ок"
+б = 42
+слово удвоить(n: целое) -> целое
+    аминь "нет"
+конец
+возгласи(а, б, удвоить("текст"))
+`
+	issues := linter.Lint(badTypes, "types.молитва")
+	typeErrs := 0
+	for _, iss := range issues {
+		if iss.Code == "type-mismatch" && iss.Severity == linter.Error {
+			typeErrs++
+		}
+	}
+	if typeErrs < 4 {
+		t.Fatalf("ожидалось >= 4 ошибок type-mismatch, получено %d: %v", typeErrs, issues)
+	}
+
+	// Корректный код с опциональными типами не должен давать type-mismatch
+	goodTypes := `
+пусть опц: целое? = ничего
+измени ч: число = 10
+ч = 3.5
+слово плюс(a: целое, b: целое) -> целое
+    аминь a + b
+конец
+возгласи(опц, ч, плюс(1, 2))
+`
+	for _, iss := range linter.Lint(goodTypes, "good_types.молитва") {
+		if iss.Code == "type-mismatch" {
+			t.Fatalf("ложное срабатывание type-mismatch: %s", iss.String())
+		}
+	}
+}

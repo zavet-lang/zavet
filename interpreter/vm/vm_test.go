@@ -155,6 +155,29 @@ func TestVMRepeatNonIntError(t *testing.T) {
 	}
 }
 
+func TestVMHashLiteralAndIndex(t *testing.T) {
+	out := runVM(t, `
+пусть д = {"имя": "Завет", 1: "число", "1": "строка"}
+д["версия"] = 2
+возгласи(д["имя"], д[1], д["1"], д["версия"], д["нет"], длина(д))
+`)
+	if strings.TrimSpace(out) != "Завет число строка 2 ничего 4" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestVMInterpolatedStringFallback(t *testing.T) {
+	l := lexer.New(`пусть x = 1` + "\n" + `возгласи("x={x}")`)
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	if _, err := Compile(prog); err == nil {
+		t.Fatalf("expected CompileError for interpolated string in VM")
+	}
+}
+
 func BenchmarkVMFib20(b *testing.B) {
 	src := `
 слово фиб(n)

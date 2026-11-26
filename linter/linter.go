@@ -74,6 +74,7 @@ func Lint(source, filename string) []Issue {
 	issues = append(issues, ctx.checkUnreachableCode(program)...)
 	issues = append(issues, ctx.checkEmptyBlocks(program)...)
 	issues = append(issues, ctx.checkReassignConst(program)...)
+	issues = append(issues, ctx.checkStaticTypes(program)...)
 
 	return issues
 }

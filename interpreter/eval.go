@@ -245,7 +245,7 @@ func Eval(node ast.Node, env *Environment) Object {
 	case *ast.StringLiteral:
 		// Проверяем интерполяцию (маркер \x00 в начале)
 		if len(node.Value) > 0 && node.Value[0] == '\x00' {
-			return evalInterpolatedString(node.Value[1:], env)
+			return evalInterpolatedString(node.Token, node.Value[1:], env)
 		}
 		return &String{Value: node.Value}
 
@@ -278,7 +278,37 @@ func Eval(node ast.Node, env *Environment) Object {
 			}
 			return left
 		}
-		
+
+		// Ленивое вычисление для «и» / «или» (совпадает с байткод-VM)
+		if node.Operator == "и" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if !isTruthy(left) {
+				return FALSE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
+		}
+		if node.Operator == "или" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if isTruthy(left) {
+				return TRUE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
+		}
+
 		left := Eval(node.Left, env)
 		if isError(left) {
 			return left

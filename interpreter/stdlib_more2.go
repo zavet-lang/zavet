@@ -77,35 +77,108 @@ func hashToHeaders(h *Hash) http.Header {
 	return hdrs
 }
 
-// httpRequest универсальная HTTP-функция
+// httpDefaultTimeout — таймаут HTTP-клиента по умолчанию (30 секунд).
+const httpDefaultTimeout = 30 * time.Second
+
+func parseHTTPTimeout(obj Object, fnName string) (time.Duration, Object) {
+	switch v := obj.(type) {
+	case *Integer:
+		if v.Value <= 0 {
+			return 0, ErrorWithHint(currentCallToken, fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
+		}
+		return time.Duration(v.Value) * time.Second, nil
+	case *Float:
+		if v.Value <= 0 {
+			return 0, ErrorWithHint(currentCallToken, fnName+": таймаут должен быть больше 0", "Передай число секунд > 0.")
+		}
+		return time.Duration(v.Value * float64(time.Second)), nil
+	default:
+		return 0, builtinErrorWrongArgType(fnName, 0, "INTEGER или FLOAT (секунды)", string(obj.Type()))
+	}
+}
+
+// httpRequest универсальная HTTP-функция.
+// Сигнатуры:
+//   http.получить(url, [заголовки|таймаут_сек], [таймаут_сек])
+//   http.пост(url, [тело], [заголовки|таймаут_сек], [таймаут_сек])
 func httpRequest(method string, args []Object) Object {
+	fnName := "http." + strings.ToLower(method)
 	if len(args) < 1 {
 		return ErrorWithHint(currentCallToken,
-			"http."+strings.ToLower(method)+"(url, [тело], [заголовки])",
+			fnName+"(url, [тело], [заголовки], [таймаут_сек])",
 			"")
 	}
 
 	urlStr, ok := args[0].(*String)
 	if !ok {
-		return builtinErrorWrongArgType("http."+strings.ToLower(method), 1, "STRING (строка)", string(args[0].Type()))
+		return builtinErrorWrongArgType(fnName, 1, "STRING (строка)", string(args[0].Type()))
 	}
 	if err := CheckHost(urlStr.Value); err != nil {
 		return err
 	}
 
+	timeout := httpDefaultTimeout
 	var body io.Reader
+	var customHeaders *Hash
+
+	// Разбор опциональных аргументов с сохранением обратной совместимости:
+	// args[1]: тело (или для GET/DELETE — заголовки или таймаут_сек)
+	// args[2]: заголовки (или таймаут_сек)
+	// args[3]: таймаут_сек
 	if len(args) >= 2 && args[1] != NULL {
 		switch b := args[1].(type) {
+		case *Integer, *Float:
+			if method == "GET" || method == "DELETE" || method == "HEAD" {
+				d, errObj := parseHTTPTimeout(args[1], fnName)
+				if errObj != nil {
+					return errObj
+				}
+				timeout = d
+			} else {
+				body = bytes.NewBufferString(b.Inspect())
+			}
 		case *String:
 			body = bytes.NewBufferString(b.Value)
 		case *Hash:
-			// Сериализуем в JSON
-			jsonStr := hashToJSON(b)
-			body = bytes.NewBufferString(jsonStr)
+			if (method == "GET" || method == "DELETE" || method == "HEAD") && len(args) <= 3 {
+				// Если для GET передан словарь 2-м аргументом, а 3-й — число или отсутствует,
+				// считаем словарь заголовками (как и документировано: http.получить(url, заголовки)).
+				if len(args) == 2 {
+					customHeaders = b
+				} else if _, isInt := args[2].(*Integer); isInt {
+					customHeaders = b
+				} else if _, isFlt := args[2].(*Float); isFlt {
+					customHeaders = b
+				} else {
+					body = bytes.NewBufferString(hashToJSON(b))
+				}
+			} else {
+				body = bytes.NewBufferString(hashToJSON(b))
+			}
 		case *Array:
-			jsonStr := arrayToJSON(b)
-			body = bytes.NewBufferString(jsonStr)
+			body = bytes.NewBufferString(arrayToJSON(b))
 		}
+	}
+
+	if len(args) >= 3 && args[2] != NULL {
+		switch a := args[2].(type) {
+		case *Hash:
+			customHeaders = a
+		case *Integer, *Float:
+			d, errObj := parseHTTPTimeout(args[2], fnName)
+			if errObj != nil {
+				return errObj
+			}
+			timeout = d
+		}
+	}
+
+	if len(args) >= 4 && args[3] != NULL {
+		d, errObj := parseHTTPTimeout(args[3], fnName)
+		if errObj != nil {
+			return errObj
+		}
+		timeout = d
 	}
 
 	req, err := http.NewRequest(method, urlStr.Value, body)
@@ -120,16 +193,14 @@ func httpRequest(method string, args []Object) Object {
 	req.Header.Set("User-Agent", "Zavet/1.0")
 
 	// Кастомные заголовки
-	if len(args) >= 3 && args[2] != NULL {
-		if hashHdr, ok := args[2].(*Hash); ok {
-			for k, v := range hashToHeaders(hashHdr) {
-				req.Header[k] = v
-			}
+	if customHeaders != nil {
+		for k, v := range hashToHeaders(customHeaders) {
+			req.Header[k] = v
 		}
 	}
 
 	client := &http.Client{
-		Timeout:   8 * time.Second,
+		Timeout:   timeout,
 		Transport: httpDefaultTransport(),
 	}
 	resp, err := client.Do(req)

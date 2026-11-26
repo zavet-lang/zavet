@@ -38,8 +38,9 @@ const (
 	OpGetLocal
 	OpSetLocal
 	OpBuildArray // Operand = count
-	OpIndex      // stack: arr, idx -> elem
-	OpSetIndex   // stack: arr, idx, val -> val
+	OpBuildHash  // Operand = pair count (2*count values on stack: k1, v1, ...)
+	OpIndex      // stack: arr/hash, idx -> elem
+	OpSetIndex   // stack: arr/hash, idx, val -> val
 	OpCheckInt   // проверяет что вершина стека — int64
 )
 

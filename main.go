@@ -68,6 +68,12 @@ func main() {
 		lspPkg.Run()
 	case "mcp":
 		mcpPkg.Run()
+	case "-e", "--выполнить", "--eval":
+		if len(rest) == 0 {
+			fmt.Println("Использование: zavet -e '<код>'")
+			os.Exit(1)
+		}
+		runWithFilename(strings.Join(rest, " "), "-e")
 	case "помощь", "--help", "-h":
 		printUsage()
 	case "версия", "--version", "-v":
@@ -120,6 +126,7 @@ func filterGlobalFlags(args []string) []string {
 func printUsage() {
 	fmt.Println("Использование:")
 	fmt.Println("  zavet <файл.молитва>             — запустить файл")
+	fmt.Println("  zavet -e '<код>'                 — выполнить строку кода")
 	fmt.Println("  zavet запустить [файл]      — запустить точку входа из пакет.json")
 	fmt.Println("  zavet инит [имя]            — создать пакет.json и главный.молитва")
 	fmt.Println("  zavet подключить ИМЯ        — установить пакет по короткому имени")
