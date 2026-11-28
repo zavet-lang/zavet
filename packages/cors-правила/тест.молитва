@@ -1,0 +1,41 @@
+приими cors из "./главный.молитва"
+
+тест "проверка точных доменов и масок поддоменов"
+    пусть список = ["https://zavet.ru", "https://*.example.com"]
+    проверить(cors.источник_разрешён("https://zavet.ru", список) == истина)
+    проверить(cors.источник_разрешён("https://api.example.com", список) == истина)
+    проверить(cors.источник_разрешён("https://a.b.example.com", список) == истина)
+    проверить(cors.источник_разрешён("https://evil.com", список) == ложь)
+    проверить(cors.источник_разрешён("https://example.com", ["https://*.example.com"]) == ложь)
+конец
+
+тест "middleware: preflight OPTIONS, credentials и запрещённый источник"
+    пусть app = веб.приложение()
+    app.использовать(cors.middleware({
+        "источники": ["https://app.zavet.ru", "https://*.stage.zavet.ru"],
+        "методы": ["GET", "POST"],
+        "заголовки": ["Content-Type", "X-Token"],
+        "открытые_заголовки": ["X-Request-Id"],
+        "учётные_данные": истина,
+        "макс_возраст": 3600,
+    }))
+    app.получить("/data", слово(запрос): веб.json({"ок": истина}))
+
+    пусть pre = app.обработать("OPTIONS", "/data", "", {"Origin": "https://app.zavet.ru"})
+    проверить(pre["статус"] == 204)
+    проверить(pre["заголовки"]["Access-Control-Allow-Origin"] == "https://app.zavet.ru")
+    проверить(pre["заголовки"]["Access-Control-Allow-Credentials"] == "true")
+    проверить(pre["заголовки"]["Access-Control-Max-Age"] == "3600")
+
+    пусть preBad = app.обработать("OPTIONS", "/data", "", {"Origin": "https://other.ru"})
+    проверить(preBad["статус"] == 403)
+
+    пусть getOk = app.обработать("GET", "/data", "", {"Origin": "https://v2.stage.zavet.ru"})
+    проверить(getOk["статус"] == 200)
+    проверить(getOk["заголовки"]["Access-Control-Allow-Origin"] == "https://v2.stage.zavet.ru")
+    проверить(getOk["заголовки"]["Access-Control-Expose-Headers"] == "X-Request-Id")
+    проверить(getOk["заголовки"]["Vary"] == "Origin")
+
+    пусть getNo = app.обработать("GET", "/data", "", {"Origin": "https://bad.ru"})
+    проверить(получить(getNo["заголовки"], "Access-Control-Allow-Origin", ничего) == ничего)
+конец
