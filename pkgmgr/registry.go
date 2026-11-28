@@ -1,6 +1,7 @@
 package pkgmgr
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,9 @@ import (
 
 // RegistryURL — URL официального реестра коротких имён пакетов Завета.
 const RegistryURL = "https://raw.githubusercontent.com/zavet-lang/zavet/main/registry/registry.json"
+
+//go:embed default_registry.json
+var defaultRegistryJSON []byte
 
 // RegistryEntry представляет один пакет в реестре.
 type RegistryEntry struct {
@@ -28,16 +32,16 @@ type Registry struct {
 
 // DefaultRegistry возвращает встроенный каталог проверенных пакетов Завета.
 // Используется как база и как резерв при отсутствии сети.
+// Содержимое синхронизировано с registry/registry.json (см. default_registry.json).
 func DefaultRegistry() *Registry {
-	return &Registry{
-		Version: 2,
-		Packages: map[string]*RegistryEntry{
-			"валидатор": {URL: "https://github.com/zavet-lang/zavet-validator", Description: "Проверка email, URL, диапазонов, строк и схем словарей", Category: "данные"},
-			"дата":      {URL: "https://github.com/zavet-lang/zavet-date", Description: "Форматирование дат на русском, склонение интервалов и календарь", Category: "время"},
-			"тг":        {URL: "https://github.com/zavet-lang/zavet-tg", Description: "Клиент Telegram Bot API (опрос, команды, клавиатуры, вебхуки)", Category: "боты"},
-			"цвета":     {URL: "https://github.com/zavet-lang/zavet-colors", Description: "ANSI-цвета, стили текста и таблицы в терминале", Category: "cli"},
-		},
+	var reg Registry
+	if err := json.Unmarshal(defaultRegistryJSON, &reg); err != nil {
+		panic(fmt.Sprintf("встроенный реестр повреждён: %v", err))
 	}
+	if reg.Packages == nil {
+		reg.Packages = map[string]*RegistryEntry{}
+	}
+	return &reg
 }
 
 // FetchRegistry загружает реестр коротких имён с GitHub и объединяет с

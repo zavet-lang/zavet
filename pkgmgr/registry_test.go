@@ -46,7 +46,17 @@ func TestRegistrySearchAndResolve(t *testing.T) {
 	}
 
 	found := reg.Search("Telegram")
-	if len(found) != 1 || found[0] != "тг" {
+	wantTelegram := map[string]bool{"тг": true, "telegram-меню": true}
+	gotTelegram := map[string]bool{}
+	for _, name := range found {
+		gotTelegram[name] = true
+	}
+	for name := range wantTelegram {
+		if !gotTelegram[name] {
+			t.Fatalf("Search(\"Telegram\") missing %q in %v", name, found)
+		}
+	}
+	if len(found) < len(wantTelegram) {
 		t.Fatalf("unexpected Search(\"Telegram\") result: %v", found)
 	}
 
